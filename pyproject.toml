@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "graph-lib"
+version = "0.1.0"
+description = ""
+authors = ["Danila <63115678+DDonnyy@users.noreply.github.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+geopandas = "^0.14.3"
+osmnx = "^1.9.1"
+tqdm = "^4.66.2"
+osm2geojson = "^0.2.4"
+jupyter = "^1.0.0"
+pydantic = "^2.6.1"
+momepy = "^0.7.0"
+networkit = "^11.0"
+numpy = "^1.23.5"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
