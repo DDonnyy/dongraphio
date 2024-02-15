@@ -10,8 +10,8 @@ from tqdm import tqdm
 import warnings
 from shapely.errors import ShapelyDeprecationWarning
 
-from osm_worker import overpass_query, get_routes, get_boundary
-from src.city_grapher.utils.graph_utils import (
+from .osm_worker import overpass_query, get_routes, get_boundary
+from .graph_utils import (
     _parse_overpass_route_response,
     _project_platforms,
     _get_nearest_edge_geometry,
