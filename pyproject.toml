@@ -1,11 +1,11 @@
 [tool.poetry]
-name = "graph-lib"
-version = "0.1.0"
+name = "dongraphio"
+version = "0.1.2"
 description = "Small utility library containing graph algorighms used in other projects"
 authors = ["Danila <63115678+DDonnyy@users.noreply.github.com>"]
 readme = "README.md"
 
-packages = [{ include = "city_grapher", from = "src" }]
+packages = [{ include = "dongraphio", from = "src" }]
 
 [tool.poetry.dependencies]
 python = "^3.10"

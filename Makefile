@@ -1,5 +1,7 @@
 CODE := src
 
+build-and-publish: build publish
+
 lint:
 	poetry run pylint $(CODE)
 
@@ -21,6 +23,9 @@ clean:
 
 build:
 	poetry build
+
+publish:
+	poetry publish
 
 install-from-build:
 	python -m wheel install dist/graph_lib-*.whl

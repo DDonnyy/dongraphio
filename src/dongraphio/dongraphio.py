@@ -5,7 +5,7 @@ import pandas as pd
 from .base_models import BuildsAvailabilitier, BuildsGrapher, BuildsMatrixer
 
 
-class Invoker:  # TODO rename to future lib name??
+class DonGraphio:
     def __init__(self, city_osm_id: int, city_crs: int):
         self.city_crs = city_crs
         self.city_osm_id = city_osm_id
