@@ -127,7 +127,7 @@ def _get_linestring(route):
     def find_equals_line(loc: dict, series: gpd.GeoSeries) -> list | None:
 
         series = series.drop(loc.name)
-        eq_lines = series.geometry.apply(lambda x: x.almost_equals(loc.geometry))
+        eq_lines = series.geometry.apply(lambda x: x.equals_exact(loc.geometry, 1e-6))
         eq_lines = series[eq_lines].index
 
         equal_lines = sorted(list(eq_lines) + [loc.name]) if len(eq_lines) > 0 else None

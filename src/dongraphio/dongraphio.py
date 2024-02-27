@@ -1,6 +1,9 @@
 import geopandas as gpd
 import networkx as nx
 import pandas as pd
+import logging
+
+from pandas import DataFrame
 
 from .base_models import BuildsAvailabilitier, BuildsGrapher, BuildsMatrixer
 
@@ -18,18 +21,16 @@ class DonGraphio:
     #     """Build a graph from OSM data and save it as the given graph type"""
     #     raise NotImplementedError()
 
-    # TODO: getter for graphs
-    # def get_graph(self, graph_type: GraphType) -> nx.Graph | None:
-    #     """Return the graph of given type"""
-    #     return self.graphs.get(graph_type)
+    def get_graph(self) -> nx.Graph | None:
+        """Return the graph of given type"""
+        return self._intermodal_graph
 
-    # TODO setter for graphs + validation
-    # def set_graph(self, graph_type: GraphType, graph: nx.Graph) -> None:
-    #     self.graphs[graph_type] = graph
-    #     raise NotImplementedError()
+    def set_graph(self, graph: nx.DiGraph) -> None:
+        self._intermodal_graph = graph
 
     # TODO: update BuildsGrapher logic to construct from the graphs, fail if not all graphs are available
-    def get_intermodal_graph(self) -> nx.MultiDiGraph:
+
+    def get_intermodal_graph_from_osm(self) -> nx.MultiDiGraph:
         # if not all(graph_type in self.graphs for graph_type in GraphType):
         #     raise ValueError("Some graph types are missing")
         self._intermodal_graph = BuildsGrapher(
@@ -40,11 +41,11 @@ class DonGraphio:
 
     def get_adjacency_matrix(
         self, buildings_from: gpd.GeoDataFrame, services_to: gpd.GeoDataFrame, weight: str
-    ) -> pd.DataFrame:
+    ) -> DataFrame | None:
 
         if self._intermodal_graph is None:
-            self.get_intermodal_graph()
-
+            logging.info("No graph has set, call get_intermodal_graph_from_osm() or set it by set_graph()")
+            return None
         return BuildsMatrixer(
             buildings_from=buildings_from,
             services_to=services_to,
@@ -55,5 +56,6 @@ class DonGraphio:
 
     def get_accessibility_isochrone(self):
         if self._intermodal_graph is None:
-            self.get_intermodal_graph()
+            logging.info("No graph has set, call get_intermodal_graph_from_osm() or set it by set_graph()")
+            return None
         return BuildsAvailabilitier(city_crs=self.city_crs).get_accessibility_isochrone()
