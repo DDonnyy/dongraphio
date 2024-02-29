@@ -1,17 +1,19 @@
+import logging
+from typing import Optional
+
 import geopandas as gpd
 import networkx as nx
 import pandas as pd
-import logging
-
-from pandas import DataFrame
 
 from .base_models import BuildsAvailabilitier, BuildsGrapher, BuildsMatrixer
+from .enums import GraphType
+
+logging.basicConfig(level=logging.INFO)
 
 
 class DonGraphio:
-    def __init__(self, city_osm_id: int, city_crs: int):
+    def __init__(self, city_crs: int):
         self.city_crs = city_crs
-        self.city_osm_id = city_osm_id
         # self.graphs: dict[GraphType, nx.Graph] = {} # TODO: add graphs to Invoker
 
         self._intermodal_graph: nx.MultiDiGraph = None
@@ -21,31 +23,66 @@ class DonGraphio:
     #     """Build a graph from OSM data and save it as the given graph type"""
     #     raise NotImplementedError()
 
-    def get_graph(self) -> nx.Graph | None:
-        """Return the graph of given type"""
+    def get_graph(self) -> Optional[nx.DiGraph]:
+        """
+        Return the intermodal graph.
+
+        Returns:
+            Optional[nx.DiGraph]: The intermodal graph if it exists, else None.
+        Raises:
+            RuntimeError: If no graph has been set, call get_intermodal_graph_from_osm() or set it by set_graph().
+        """
+        if self._intermodal_graph is None:
+            raise RuntimeError("No graph has set, call get_intermodal_graph_from_osm() or set it by set_graph()")
         return self._intermodal_graph
 
     def set_graph(self, graph: nx.DiGraph) -> None:
+        """
+        Set the intermodal graph for the object.
+
+        Args:
+            graph (nx.DiGraph): The graph to be set.
+        Returns:
+            None
+        """
         self._intermodal_graph = graph
 
     # TODO: update BuildsGrapher logic to construct from the graphs, fail if not all graphs are available
 
-    def get_intermodal_graph_from_osm(self) -> nx.MultiDiGraph:
+    def get_intermodal_graph_from_osm(self, city_osm_id: int) -> nx.MultiDiGraph:
+        """
+        Retrieves the intermodal graph for a given city from OpenStreetMap.
+        Args:
+            city_osm_id (int): The OpenStreetMap ID of the city.
+        Returns:
+            nx.MultiDiGraph: The intermodal graph representing the city.
+        """
         # if not all(graph_type in self.graphs for graph_type in GraphType):
         #     raise ValueError("Some graph types are missing")
         self._intermodal_graph = BuildsGrapher(
-            city_osm_id=self.city_osm_id,
+            city_osm_id=city_osm_id,
             city_crs=self.city_crs,
         ).get_intermodal_graph()
         return self._intermodal_graph
 
     def get_adjacency_matrix(
         self, buildings_from: gpd.GeoDataFrame, services_to: gpd.GeoDataFrame, weight: str
-    ) -> DataFrame | None:
+    ) -> Optional[pd.DataFrame]:
+        """
+        Calculate the adjacency matrix between the given buildings and services based on the specified weight.
 
+        Parameters:
+            buildings_from (gpd.GeoDataFrame): The GeoDataFrame containing the buildings.
+            services_to (gpd.GeoDataFrame): The GeoDataFrame containing the services.
+            weight (str): The weight attribute, could be only "time_min" or"length_meter".
+        Returns:
+            Optional[pd.DataFrame]: The adjacency matrix as a DataFrame, or None if the intermodal graph is not set.
+         Raises:
+            RuntimeError: If no graph has been set, call get_intermodal_graph_from_osm() or set it by set_graph().
+        """
         if self._intermodal_graph is None:
-            logging.info("No graph has set, call get_intermodal_graph_from_osm() or set it by set_graph()")
-            return None
+            raise RuntimeError("No graph has set, call get_intermodal_graph_from_osm() or set it by set_graph()")
+
         return BuildsMatrixer(
             buildings_from=buildings_from,
             services_to=services_to,
@@ -54,8 +91,35 @@ class DonGraphio:
             nx_intermodal_graph=self._intermodal_graph,
         ).get_adjacency_matrix()
 
-    def get_accessibility_isochrone(self):
+    def get_accessibility_isochrones(
+        self, graph_type: list[GraphType], x_from: float, y_from: float, weight_value: int, weight_type: str
+    ) -> (gpd.GeoDataFrame, Optional[gpd.GeoDataFrame], Optional[gpd.GeoDataFrame]):
+        """
+        Get accessibility isochrones and return three GeoDataFrame objects with isochrones, and
+        if graph_type contains GraphType.PUBLIC_TRANSPORT enum - routes and public transport stops.
+
+        Parameters:
+            graph_type (list[GraphType]): The type of the graph.
+            x_from (float): The x-coordinate of the starting point.
+            y_from (float): The y-coordinate of the starting point.
+            weight_value (int): The value of the weight.
+            weight_type (str): The type of the weight, could be only "time_min" or "length_meter" .
+
+        Returns:
+            (gpd.GeoDataFrame, Optional[gpd.GeoDataFrame], Optional[gpd.GeoDataFrame]): Isochrones,routes,stops.
+        Raises:
+            RuntimeError: If no graph has been set, call get_intermodal_graph_from_osm() or set it by set_graph().
+        """
+        # Check if intermodal graph is set
         if self._intermodal_graph is None:
-            logging.info("No graph has set, call get_intermodal_graph_from_osm() or set it by set_graph()")
-            return None
-        return BuildsAvailabilitier(city_crs=self.city_crs).get_accessibility_isochrone()
+            raise RuntimeError("No graph has set, call get_intermodal_graph_from_osm() or set it by set_graph()")
+        # Build accessibility isochrones
+        return BuildsAvailabilitier(
+            graph_type=graph_type,
+            city_crs=self.city_crs,
+            x_from=x_from,
+            y_from=y_from,
+            weight_value=weight_value,
+            weight_type=weight_type,
+            nx_intermodal_graph=self._intermodal_graph,
+        ).get_accessibility_isochrone()

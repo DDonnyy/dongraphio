@@ -114,7 +114,6 @@ def update_edges(points_info, G):
     G_with_drop_edges = _delete_edges(points_info, G)  # pylint: disable=invalid-name
     updated_G, split_points = _add_splitted_edges(G_with_drop_edges, points_info)  # pylint: disable=invalid-name
     updated_G, split_points = _add_connecting_edges(updated_G, split_points)  # pylint: disable=invalid-name
-
     return updated_G, split_points
 
 
