@@ -43,7 +43,9 @@ def join_graph(
     return G_base
 
 
-def get_osmnx_graph(city_osm_id: int, city_crs: int, graph_type: str, speed: int | float | None = None) -> nx.MultiDiGraph:
+def get_osmnx_graph(
+    city_osm_id: int, city_crs: int, graph_type: str, speed: int | float | None = None
+) -> nx.MultiDiGraph:
     boundary = overpass_request(get_boundary, city_osm_id)
     boundary = osm2geojson.json2geojson(boundary)
     boundary = gpd.GeoDataFrame.from_features(boundary["features"]).set_crs(4326)
@@ -145,7 +147,9 @@ def public_routes_to_edges(city_osm_id, city_crs, transport_type, speed, boundar
     return edges
 
 
-def graphs_spatial_union(G_base: nx.MultiDiGraph, G_to_project: nx.MultiDiGraph) -> nx.MultiDiGraph:  # pylint: disable=invalid-name
+def graphs_spatial_union(
+    G_base: nx.MultiDiGraph, G_to_project: nx.MultiDiGraph
+) -> nx.MultiDiGraph:  # pylint: disable=invalid-name
     points = gpd.GeoDataFrame(
         [[n, Point((d["x"], d["y"]))] for n, d in G_to_project.nodes(data=True)],
         columns=["node_id_to_project", "geometry"],

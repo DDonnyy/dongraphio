@@ -1,12 +1,11 @@
-import json
 import logging
-from typing import Literal
+from typing import Literal, Optional
 
+import geopandas as gpd
 import networkit as nk
 import networkx as nx
 import numpy as np
 import pandas as pd
-import geopandas as gpd
 import shapely
 from pydantic import BaseModel, InstanceOf
 
@@ -94,7 +93,7 @@ class BuildsMatrixer(BaseModel):
             int(len(distance_matrix) / 1000) + 1,
         )
 
-        # TODO use a* instead of dijkstra
+        # TODO use a* instead of dijkstra?
         for i in range(len(splited_matrix)):  # pylint: disable=consider-using-enumerate
             r = nk.distance.SPSP(G=nk_graph, sources=splited_matrix[i].index.values).run()
             splited_matrix[i] = splited_matrix[i].apply(lambda x: matrix_utils.get_nk_distances(r, x), axis=1)
@@ -109,28 +108,25 @@ class BuildsMatrixer(BaseModel):
 class BuildsAvailabilitier(BaseModel):
     graph_type: list[GraphType]
     city_crs: int
-    x_from: list  # TODO add single int to list validator
-    y_from: list  # TODO add single int to list validator
+    x_from: float
+    y_from: float
     weight_value: int
     weight_type: Literal["time_min", "length_meter"]
     nx_intermodal_graph: InstanceOf[nx.DiGraph]
     _edge_types = None
 
-    def get_accessibility_isochrone(self):
+    def get_accessibility_isochrone(self) -> (gpd.GeoDataFrame, Optional[gpd.GeoDataFrame], Optional[gpd.GeoDataFrame]):
         def _get_nk_distances(nk_dists, loc):
             target_nodes = loc.index.astype("int")
             source_node = loc.name
             distances = [nk_dists.getDistance(source_node, node) for node in target_nodes]
             return pd.Series(data=distances, index=target_nodes)
 
-        source = pd.DataFrame(
-            data=list(zip(range(len(self.x_from)), self.x_from, self.y_from)), columns=["id", "x", "y"]
-        )
+        source = gpd.GeoDataFrame(geometry=gpd.points_from_xy([self.x_from], [self.y_from], crs=self.city_crs))
 
-        source = gpd.GeoDataFrame(source, geometry=gpd.points_from_xy(source["x"], source["y"], crs=self.city_crs))
         self._edge_types = [t.value for t in set().union(*(d.value.get("types") for d in self.graph_type))]
-        mobility_graph = matrix_utils.get_subgraph(self.nx_intermodal_graph, "type", self._edge_types)
 
+        mobility_graph = matrix_utils.get_subgraph(self.nx_intermodal_graph, "type", self._edge_types)
         mobility_graph = nx.convert_node_labels_to_integers(mobility_graph)
         graph_df = pd.DataFrame.from_dict(dict(mobility_graph.nodes(data=True)), orient="index")
         graph_gdf = gpd.GeoDataFrame(graph_df, geometry=gpd.points_from_xy(graph_df["x"], graph_df["y"])).set_crs(
@@ -138,79 +134,77 @@ class BuildsAvailabilitier(BaseModel):
         )
 
         from_sources = graph_gdf["geometry"].sindex.nearest(source["geometry"], return_distance=True, return_all=False)
-
-        distances = pd.DataFrame(0, index=from_sources[0][1], columns=list(mobility_graph.nodes()))
+        source_index = from_sources[0][1]
+        distances = pd.DataFrame(0, index=source_index, columns=list(mobility_graph.nodes()))
 
         nk_graph = matrix_utils.convert_nx2nk(
             mobility_graph, idmap=matrix_utils.get_nx2nk_idmap(mobility_graph), weight=self.weight_type
         )
-        logging.info("Before finding dis")
+
         nk_dists = nk.distance.SPSP(G=nk_graph, sources=distances.index.values).run()
-        logging.info("After finding dis")
+
         distances = distances.apply(lambda x: _get_nk_distances(nk_dists, x), axis=1)
 
         dist_nearest = pd.DataFrame(data=from_sources[1], index=from_sources[0][1], columns=["dist"])
         walk_speed = 4 * 1000 / 60
         dist_nearest = dist_nearest / walk_speed if self.weight_type == "time_min" else dist_nearest
-        distances = distances.add(dist_nearest.dist, axis=0)
+        distances = distances.add(dist_nearest.dist, axis=0).transpose()
 
-        cols = distances.columns.to_numpy()
-        source["isochrone_nodes"] = [cols[x].tolist() for x in distances.le(self.weight_value).to_numpy()]
+        distances = distances[distances[source_index[0]] <= self.weight_value]
 
-        for x, y in list(zip(from_sources[0][1], source["isochrone_nodes"])):
-            y.extend([x])
-
-        source["isochrone_geometry"] = source["isochrone_nodes"].apply(
-            lambda x: [graph_gdf["geometry"].loc[[y for y in x]]]
+        distances["geometry"] = distances.apply(
+            lambda x: (
+                graph_gdf.loc[x.index].geometry.buffer(round(self.weight_value - x, 2) * walk_speed * 0.8)
+                if self.weight_type == "time_min"
+                else graph_gdf.loc[x.index].geometry.buffer(round(self.weight_value - x, 2) * 0.8)
+            )
         )
-        source["isochrone_geometry"] = [list(x[0].geometry) for x in source["isochrone_geometry"]]
-        source["isochrone_geometry"] = [[y.buffer(0.01) for y in x] for x in source["isochrone_geometry"]]
-        source["isochrone_geometry"] = source["isochrone_geometry"].apply(
-            lambda x: shapely.ops.cascaded_union(x).convex_hull
-        )
-        source["isochrone_geometry"] = gpd.GeoSeries(source["isochrone_geometry"], crs=self.city_crs)
+        isochrone_geometry = gpd.GeoDataFrame(data=distances, geometry="geometry").geometry.unary_union
 
-        isochrones = [
-            gpd.GeoDataFrame(
-                {
-                    "travel_type": [str([d.value.get("name") for d in self.graph_type])],
-                    "weight_type": [self.weight_type],
-                    "weight_value": [self.weight_value],
-                    "geometry": [x],
-                },
-                geometry=[x],
-                crs=self.city_crs,
-            )  # .to_crs(4326)
-            for x in source["isochrone_geometry"]
-        ]
-        stops, routes = ([None], [None])
-        isochrones = pd.concat([x for x in isochrones])
+        isochrones = gpd.GeoDataFrame(
+            {
+                "travel_type": [str([d.value.get("name") for d in self.graph_type])],
+                "weight_type": [self.weight_type],
+                "weight_value": [self.weight_value],
+                "geometry": [isochrone_geometry],
+            },
+            geometry="geometry",
+            crs=self.city_crs,
+        )
+
+        stops, routes = (None, None)
+
         if GraphType.PUBLIC_TRANSPORT in self.graph_type and self.weight_type == "time_min":
-            stops, routes = self._get_routes(graph_gdf, source["isochrone_nodes"], mobility_graph)
+            stops, routes = self._get_routes(graph_gdf, distances.index.values, mobility_graph)
         return isochrones, routes, stops
 
     def _get_routes(self, graph_gdf, selected_nodes, mobility_graph):
         stops = graph_gdf[graph_gdf["stop"] == "True"]
-        stop_types = stops["desc"].apply(lambda x: pd.Series({t: True for t in x.split(", ")}), type).fillna(False)
+        stop_types = (
+            stops["desc"]
+            .astype(object)
+            .apply(lambda x: pd.Series({t: True for t in x.split(", ")}))
+            .fillna(False)
+            .infer_objects(copy=False)
+        )
         stops = stops.join(stop_types)
         stops.reset_index(inplace=True)
         stops.rename(columns={"index": "nodeID"}, inplace=True)
-        stops_result = [stops.loc[stops["nodeID"].isin(x)].to_crs(4326) for x in selected_nodes]
+        stops_result = [stops.loc[stops["nodeID"].isin(selected_nodes)]]
         nodes = [x["nodeID"] for x in stops_result]
         subgraph = [mobility_graph.subgraph(x) for x in nodes]
         routes = [pd.DataFrame.from_records([e[-1] for e in x.edges(data=True, keys=True)]) for x in subgraph]
 
         def routes_selection(routes):
             if len(routes) > 0:
-                routes_select = routes[routes["type"].isin(self._edge_types[:-1])]
+                routes_select = routes[routes["type"].isin(self._edge_types)]
                 routes_select["geometry"] = routes_select["geometry"].apply(lambda x: shapely.wkt.loads(x))
                 routes_select = routes_select[["type", "time_min", "length_meter", "geometry"]]
-                routes_select = gpd.GeoDataFrame(routes_select, crs=self.city_crs).to_crs(4326)
+                routes_select = gpd.GeoDataFrame(routes_select, crs=self.city_crs)
                 return routes_select
-            else:
-                return None
+            return None
 
         routes_result = list(map(routes_selection, routes))
-        routes_result = gpd.GeoDataFrame(data=routes_result[0],geometry="geometry")
-        stops_result = gpd.GeoDataFrame(data = stops_result[0],geometry="geometry")
+        routes_result = gpd.GeoDataFrame(data=routes_result[0], geometry="geometry")
+        stops_result = gpd.GeoDataFrame(data=stops_result[0], geometry="geometry")
         return stops_result, routes_result

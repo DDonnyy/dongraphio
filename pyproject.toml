@@ -51,6 +51,8 @@ good-names = [
     "G_nk",
     "G_walk",
     "G_drive",
+    "G_base",
+    "G_to_project",
     "G_public_transport",
 ]
 

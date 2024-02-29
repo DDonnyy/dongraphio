@@ -1,4 +1,4 @@
-CODE := src
+CODE := src/dongraphio
 
 build-and-publish: clean build publish
 
