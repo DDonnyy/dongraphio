@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dongraphio"
-version = "0.2.0"
+version = "0.2.2"
 description = "Small utility library containing graph algorighms used in other projects"
 authors = ["Danila <63115678+DDonnyy@users.noreply.github.com>"]
 readme = "README.md"
@@ -64,3 +64,5 @@ use_parentheses = true
 ensure_newline_before_comments = true
 line_length = 120
 split_on_trailing_comma = true
+
+geopandas~=0.14.3
