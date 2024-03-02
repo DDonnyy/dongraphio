@@ -1,6 +1,6 @@
-CODE := src
+CODE := src/dongraphio
 
-build-and-publish: build publish
+build-and-publish: clean build publish
 
 lint:
 	poetry run pylint $(CODE)

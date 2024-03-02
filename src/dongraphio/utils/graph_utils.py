@@ -11,7 +11,7 @@ from tqdm import tqdm
 tqdm.pandas()
 
 
-def parse_overpass_route_response(loc: dict, city_crs: int, boundary: gpd.GeoDataFrame):
+def parse_overpass_route_response(loc: dict, city_crs: int, boundary: gpd.GeoDataFrame, use_boundary: bool):
     route = pd.DataFrame(loc["members"])
     ways = route[route["type"] == "way"]
     if len(ways) > 0:
@@ -19,7 +19,7 @@ def parse_overpass_route_response(loc: dict, city_crs: int, boundary: gpd.GeoDat
         ways = ways.apply(pd.DataFrame)
         ways = ways.apply(lambda x: LineString(list(zip(x["lon"], x["lat"]))))
         ways = gpd.GeoDataFrame(ways.rename("geometry")).set_crs(4326)
-        if ways.within(boundary).all():
+        if ways.within(boundary).all() or not use_boundary:
             # fix topological errors and then make LineString from MultiLineString
             ways = _get_linestring(ways.to_crs(city_crs))
         else:
@@ -114,7 +114,6 @@ def update_edges(points_info, G):
     G_with_drop_edges = _delete_edges(points_info, G)  # pylint: disable=invalid-name
     updated_G, split_points = _add_splitted_edges(G_with_drop_edges, points_info)  # pylint: disable=invalid-name
     updated_G, split_points = _add_connecting_edges(updated_G, split_points)  # pylint: disable=invalid-name
-
     return updated_G, split_points
 
 
@@ -127,7 +126,7 @@ def _get_linestring(route):
     def find_equals_line(loc: dict, series: gpd.GeoSeries) -> list | None:
 
         series = series.drop(loc.name)
-        eq_lines = series.geometry.apply(lambda x: x.almost_equals(loc.geometry))
+        eq_lines = series.geometry.apply(lambda x: x.equals_exact(loc.geometry, 1e-6))
         eq_lines = series[eq_lines].index
 
         equal_lines = sorted(list(eq_lines) + [loc.name]) if len(eq_lines) > 0 else None

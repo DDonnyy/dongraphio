@@ -8,7 +8,7 @@ import osm2geojson
 import osmnx.graph as ox_graph
 import pandas as pd
 from shapely import LineString, Point, geometry
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from .graph_utils import (
     get_nearest_edge_geometry,
@@ -25,9 +25,7 @@ pd.options.mode.chained_assignment = None
 tqdm.pandas()
 
 
-def join_graph(
-    G_base: nx.Graph, G_to_project: nx.Graph, points_df: pd.DataFrame  # pylint: disable=invalid-name
-) -> nx.Graph:
+def join_graph(G_base: nx.MultiDiGraph, G_to_project: nx.MultiDiGraph, points_df: pd.DataFrame) -> nx.MultiDiGraph:
 
     new_nodes = points_df.set_index("node_id_to_project")["connecting_node_id"]
     for n1, n2, d in tqdm(G_to_project.edges(data=True)):
@@ -43,12 +41,14 @@ def join_graph(
     return G_base
 
 
-def get_osmnx_graph(city_osm_id: int, city_crs: int, graph_type: str, speed: int | float | None = None) -> nx.Graph:
+def get_osmnx_graph(
+    city_osm_id: int, city_crs: int, graph_type: str, speed: int | float | None = None
+) -> nx.MultiDiGraph:
     boundary = overpass_request(get_boundary, city_osm_id)
     boundary = osm2geojson.json2geojson(boundary)
     boundary = gpd.GeoDataFrame.from_features(boundary["features"]).set_crs(4326)
 
-    logging.debug("Extracting and preparing %s graph...", graph_type)
+    logging.info("Extracting and preparing %s graph from OSM", graph_type)
     G_ox = ox_graph.graph_from_polygon(polygon=boundary["geometry"][0], network_type=graph_type)
     G_ox.graph["approach"] = "primal"
 
@@ -69,9 +69,8 @@ def get_osmnx_graph(city_osm_id: int, city_crs: int, graph_type: str, speed: int
     travel_type = "walk" if graph_type == "walk" else "car"
     if not speed:
         speed = 4 * 1000 / 60 if graph_type == "walk" else 17 * 1000 / 60
-    logging.debug("Collecting graph")
     G = nx.MultiDiGraph()
-    for _, edge in tqdm(edges.iterrows(), total=len(edges)):
+    for _, edge in tqdm(edges.iterrows(), total=len(edges), desc=f"Collecting {graph_type} graph"):
         p1 = int(edge.node_start)
         p2 = int(edge.node_end)
         geom = (
@@ -100,17 +99,15 @@ def get_osmnx_graph(city_osm_id: int, city_crs: int, graph_type: str, speed: int
     G.graph["graph_type"] = travel_type + " graph"
     G.graph[travel_type + " speed"] = round(speed, 2)
 
-    logging.debug("%s graph done!", graph_type.capitalize())
     return G
 
 
-def public_routes_to_edges(city_osm_id, city_crs, transport_type, speed, boundary):
+def public_routes_to_edges(city_osm_id, city_crs, transport_type, speed, boundary, use_boundary: bool):
     routes = overpass_request(get_routes, city_osm_id, transport_type)
-    logging.info("Extracting and preparing %s routes:\n", transport_type)
-
     try:
+        tqdm.pandas(desc=f"Extracting and preparing {transport_type} routes from OSM", postfix=None)
         df_routes: gpd.GeoDataFrame = routes.progress_apply(
-            lambda x: parse_overpass_route_response(x, city_crs, boundary),
+            lambda x: parse_overpass_route_response(x, city_crs, boundary, use_boundary),
             axis=1,
             result_type="expand",
         )
@@ -145,7 +142,9 @@ def public_routes_to_edges(city_osm_id, city_crs, transport_type, speed, boundar
     return edges
 
 
-def graphs_spatial_union(G_base: nx.Graph, G_to_project: nx.Graph) -> nx.Graph:  # pylint: disable=invalid-name
+def graphs_spatial_union(
+    G_base: nx.MultiDiGraph, G_to_project: nx.MultiDiGraph
+) -> nx.MultiDiGraph:  # pylint: disable=invalid-name
     points = gpd.GeoDataFrame(
         [[n, Point((d["x"], d["y"]))] for n, d in G_to_project.nodes(data=True)],
         columns=["node_id_to_project", "geometry"],
@@ -176,12 +175,16 @@ def graphs_spatial_union(G_base: nx.Graph, G_to_project: nx.Graph) -> nx.Graph: 
 
 
 def get_public_trasport_graph(
-    city_osm_id: int, city_crs: int, gdf_files: dict[str, str] | None, transport_types_speed: dict | None = None
+    city_osm_id: int,
+    city_crs: int,
+    gdf_files: dict[str, str] | None,
+    use_boundary: bool = True,
+    transport_types_speed: dict | None = None,
 ):
     G = nx.MultiDiGraph()
     edegs_different_types = []
     if not transport_types_speed:
-        transport_types_speed = {
+        transport_types_speed = {  # TODO add enum in future version
             "subway": 12 * 1000 / 60,
             "tram": 15 * 1000 / 60,
             "trolleybus": 12 * 1000 / 60,
@@ -202,11 +205,10 @@ def get_public_trasport_graph(
         boundary = geometry.shape(boundary["features"][0]["geometry"])
 
         for transport_type, speed in transport_types_speed.items():
-            logging.debug("Getting public routes data from OSM...")
-            edges = public_routes_to_edges(city_osm_id, city_crs, transport_type, speed, boundary)
+            edges = public_routes_to_edges(city_osm_id, city_crs, transport_type, speed, boundary, use_boundary)
             edegs_different_types.extend(edges)
     else:
-        logging.debug("Getting public routes data from files %s", ", ".join(gdf_files.values()))
+        logging.info("Getting public routes data from files %s", ", ".join(gdf_files.values()))
         for transport_type, speed in transport_types_speed.items():
             files = gdf_files.get(transport_type)
             if not files.get("routes") or not files.get("stops"):
@@ -243,7 +245,7 @@ def get_public_trasport_graph(
     G.graph["graph_type"] = "public transport graph"
     G.graph.update({k + " speed": round(v, 2) for k, v in transport_types_speed.items()})
 
-    logging.debug("Public transport graph done!")
+    logging.info("Public transport graph done!")
     return G
 
 

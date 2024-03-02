@@ -9,7 +9,7 @@ def get_subgraph(G_nx: nx.Graph, attr, value):
     return G_nx.edge_subgraph([(u, v, k) for u, v, k, d in G_nx.edges(data=True, keys=True) if d[attr] in value])
 
 
-def convert_nx2nk(G_nx: nx.Graph, idmap: dict[int, int] | None = None, weight: int | None = None):
+def convert_nx2nk(G_nx: nx.Graph, idmap: dict[int, int] | None = None, weight: str | None = None):
     if not idmap:
         idmap = get_nx2nk_idmap(G_nx)
     n = max(idmap.values()) + 1
