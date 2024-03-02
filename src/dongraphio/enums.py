@@ -19,9 +19,24 @@ class GraphType(Enum):
     Enumeration class for possible graph types, containing Russian name and possible EdgeTypes(Enum).
     """
 
-    PUBLIC_TRANSPORT = {
-        "name": "Общественный транспорт",
-        "types": [EdgeTypes.SUBWAY, EdgeTypes.BUS, EdgeTypes.TRAM, EdgeTypes.TROLLEYBUS],
-    }
-    DRIVE = {"name": "Личный транспорт", "types": [EdgeTypes.DRIVE]}
-    WALK = {"name": "Пешком", "types": [EdgeTypes.WALK]}
+    PUBLIC_TRANSPORT = "public_transport"
+    DRIVE = "drive"
+    WALK = "walk"
+
+    @property
+    def russian_name(self) -> str:
+        names = {
+            GraphType.PUBLIC_TRANSPORT: "Общественный транспорт",
+            GraphType.DRIVE: "Личный транспорт",
+            GraphType.WALK: "Пешком",
+        }
+        return names[self]
+
+    @property
+    def edges(self):
+        edges = {
+            GraphType.PUBLIC_TRANSPORT: [EdgeTypes.SUBWAY, EdgeTypes.BUS, EdgeTypes.TRAM, EdgeTypes.TROLLEYBUS],
+            GraphType.DRIVE: [EdgeTypes.DRIVE],
+            GraphType.WALK: [EdgeTypes.WALK],
+        }
+        return edges[self]

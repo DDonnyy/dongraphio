@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 
 import geopandas as gpd
 import networkx as nx
@@ -49,19 +49,19 @@ class DonGraphio:
 
     # TODO: update BuildsGrapher logic to construct from the graphs, fail if not all graphs are available
 
-    def get_intermodal_graph_from_osm(self, city_osm_id: int) -> nx.MultiDiGraph:
+    def get_intermodal_graph_from_osm(self, city_osm_id: int, keep_city_boundary: bool = True) -> nx.MultiDiGraph:
         """
         Retrieves the intermodal graph for a given city from OpenStreetMap.
         Args:
             city_osm_id (int): The OpenStreetMap ID of the city.
+            keep_city_boundary (bool, optional): Whether to keep the city boundary in the graph. Defaults to True.
         Returns:
             nx.MultiDiGraph: The intermodal graph representing the city.
         """
         # if not all(graph_type in self.graphs for graph_type in GraphType):
         #     raise ValueError("Some graph types are missing")
         self._intermodal_graph = BuildsGrapher(
-            city_osm_id=city_osm_id,
-            city_crs=self.city_crs,
+            city_osm_id=city_osm_id, city_crs=self.city_crs, keep_city_boundary=keep_city_boundary
         ).get_intermodal_graph()
         return self._intermodal_graph
 
@@ -69,15 +69,16 @@ class DonGraphio:
         self, buildings_from: gpd.GeoDataFrame, services_to: gpd.GeoDataFrame, weight: str
     ) -> Optional[pd.DataFrame]:
         """
-        Calculate the adjacency matrix between the given buildings and services based on the specified weight.
+        Calculate the adjacency matrix between the given GeoDataFrames based on
+        the specified weight and intermodal graph.
 
-        Parameters:
+        Args:
             buildings_from (gpd.GeoDataFrame): The GeoDataFrame containing the buildings.
             services_to (gpd.GeoDataFrame): The GeoDataFrame containing the services.
             weight (str): The weight attribute, could be only "time_min" or"length_meter".
         Returns:
             Optional[pd.DataFrame]: The adjacency matrix as a DataFrame, or None if the intermodal graph is not set.
-         Raises:
+        Raises:
             RuntimeError: If no graph has been set, call get_intermodal_graph_from_osm() or set it by set_graph().
         """
         if self._intermodal_graph is None:
@@ -93,15 +94,15 @@ class DonGraphio:
 
     def get_accessibility_isochrones(
         self, graph_type: list[GraphType], x_from: float, y_from: float, weight_value: int, weight_type: str
-    ) -> (gpd.GeoDataFrame, Optional[gpd.GeoDataFrame], Optional[gpd.GeoDataFrame]):
+    ) -> Tuple[gpd.GeoDataFrame, Optional[gpd.GeoDataFrame], Optional[gpd.GeoDataFrame]]:
         """
         Get accessibility isochrones and return three GeoDataFrame objects with isochrones, and
         if graph_type contains GraphType.PUBLIC_TRANSPORT enum - routes and public transport stops.
 
-        Parameters:
-            graph_type (list[GraphType]): The type of the graph.
-            x_from (float): The x-coordinate of the starting point.
-            y_from (float): The y-coordinate of the starting point.
+        Args:
+            graph_type (list[GraphType]): The List of Enum types of the graph to build isochrones.
+            x_from (float): The x-coordinate of the starting point in the corresponding coordinate system.
+            y_from (float): The y-coordinate of the starting point in the corresponding coordinate system.
             weight_value (int): The value of the weight.
             weight_type (str): The type of the weight, could be only "time_min" or "length_meter" .
 

@@ -1,5 +1,5 @@
 import logging
-from typing import Literal, Optional
+from typing import Literal, Optional, Tuple
 
 import geopandas as gpd
 import networkit as nk
@@ -8,14 +8,18 @@ import numpy as np
 import pandas as pd
 import shapely
 from pydantic import BaseModel, InstanceOf
+from tqdm.auto import tqdm
 
 from .enums import GraphType
 from .utils import graphs, matrix_utils
+
+tqdm.pandas()
 
 
 class BuildsGrapher(BaseModel):
     city_osm_id: int
     city_crs: int
+    keep_city_boundary: bool = True
     public_transport_speeds: dict = None
     walk_speed: dict = None
     drive_speed: dict = None
@@ -23,14 +27,14 @@ class BuildsGrapher(BaseModel):
 
     def get_intermodal_graph(self) -> nx.MultiDiGraph:
         G_public_transport: nx.MultiDiGraph = graphs.get_public_trasport_graph(
-            self.city_osm_id, self.city_crs, self.gdf_files, self.public_transport_speeds
+            self.city_osm_id, self.city_crs, self.gdf_files, self.keep_city_boundary, self.public_transport_speeds
         )
         G_walk: nx.MultiDiGraph = graphs.get_osmnx_graph(self.city_osm_id, self.city_crs, "walk", speed=self.walk_speed)
 
         G_drive: nx.MultiDiGraph = graphs.get_osmnx_graph(
             self.city_osm_id, self.city_crs, "drive", speed=self.drive_speed
         )
-        logging.info("Union of city_graphs...")
+        logging.info("Preparing union of city_graphs...")
         nx_intermodal_graph: nx.MultiDiGraph = graphs.graphs_spatial_union(G_walk, G_drive)
         if G_public_transport.number_of_edges() > 0:
             nx_intermodal_graph: nx.MultiDiGraph = graphs.graphs_spatial_union(nx_intermodal_graph, G_public_transport)
@@ -67,17 +71,14 @@ class BuildsMatrixer(BaseModel):
         mobility_sub_graph = matrix_utils.get_subgraph(
             self.nx_intermodal_graph.copy(),
             "type",
-            [
-                t.value
-                for t in set().union(*(d.value.get("types") for d in (GraphType.PUBLIC_TRANSPORT, GraphType.WALK)))
-            ],
+            [t.value for t in (GraphType.PUBLIC_TRANSPORT.edges, GraphType.WALK.edges)],
         )
 
         nk_graph = matrix_utils.convert_nx2nk(
             mobility_sub_graph, idmap=matrix_utils.get_nx2nk_idmap(mobility_sub_graph), weight=self.weight
         )
 
-        graph_with_geom = matrix_utils.load_graph_geometry(self.nx_intermodal_graph)
+        graph_with_geom = matrix_utils.load_graph_geometry(mobility_sub_graph)
         df = pd.DataFrame.from_dict(dict(graph_with_geom.nodes(data=True)), orient="index")
         graph_gdf = gpd.GeoDataFrame(df, geometry=df["geometry"], crs=self.city_crs)
         from_houses = graph_gdf["geometry"].sindex.nearest(
@@ -94,6 +95,7 @@ class BuildsMatrixer(BaseModel):
         )
 
         # TODO use a* instead of dijkstra?
+        logging.info("Calculating distances from buildings to services")
         for i in range(len(splited_matrix)):  # pylint: disable=consider-using-enumerate
             r = nk.distance.SPSP(G=nk_graph, sources=splited_matrix[i].index.values).run()
             splited_matrix[i] = splited_matrix[i].apply(lambda x: matrix_utils.get_nk_distances(r, x), axis=1)
@@ -115,7 +117,9 @@ class BuildsAvailabilitier(BaseModel):
     nx_intermodal_graph: InstanceOf[nx.DiGraph]
     _edge_types = None
 
-    def get_accessibility_isochrone(self) -> (gpd.GeoDataFrame, Optional[gpd.GeoDataFrame], Optional[gpd.GeoDataFrame]):
+    def get_accessibility_isochrone(
+        self,
+    ) -> Tuple[gpd.GeoDataFrame, Optional[gpd.GeoDataFrame], Optional[gpd.GeoDataFrame]]:
         def _get_nk_distances(nk_dists, loc):
             target_nodes = loc.index.astype("int")
             source_node = loc.name
@@ -124,7 +128,7 @@ class BuildsAvailabilitier(BaseModel):
 
         source = gpd.GeoDataFrame(geometry=gpd.points_from_xy([self.x_from], [self.y_from], crs=self.city_crs))
 
-        self._edge_types = [t.value for t in set().union(*(d.value.get("types") for d in self.graph_type))]
+        self._edge_types = [d.value for d in sum([t.edges for t in self.graph_type], [])]
 
         mobility_graph = matrix_utils.get_subgraph(self.nx_intermodal_graph, "type", self._edge_types)
         mobility_graph = nx.convert_node_labels_to_integers(mobility_graph)
@@ -142,7 +146,7 @@ class BuildsAvailabilitier(BaseModel):
         )
 
         nk_dists = nk.distance.SPSP(G=nk_graph, sources=distances.index.values).run()
-
+        logging.info("Calculating distances from the specified point...")
         distances = distances.apply(lambda x: _get_nk_distances(nk_dists, x), axis=1)
 
         dist_nearest = pd.DataFrame(data=from_sources[1], index=from_sources[0][1], columns=["dist"])
@@ -152,6 +156,7 @@ class BuildsAvailabilitier(BaseModel):
 
         distances = distances[distances[source_index[0]] <= self.weight_value]
 
+        logging.info("Building isochrones geometry...")
         distances["geometry"] = distances.apply(
             lambda x: (
                 graph_gdf.loc[x.index].geometry.buffer(round(self.weight_value - x, 2) * walk_speed * 0.8)
@@ -163,7 +168,7 @@ class BuildsAvailabilitier(BaseModel):
 
         isochrones = gpd.GeoDataFrame(
             {
-                "travel_type": [str([d.value.get("name") for d in self.graph_type])],
+                "travel_type": [str([d.russian_name for d in self.graph_type])],
                 "weight_type": [self.weight_type],
                 "weight_value": [self.weight_value],
                 "geometry": [isochrone_geometry],
@@ -184,6 +189,7 @@ class BuildsAvailabilitier(BaseModel):
             stops["desc"]
             .astype(object)
             .apply(lambda x: pd.Series({t: True for t in x.split(", ")}))
+            .astype(bool)
             .fillna(False)
             .infer_objects(copy=False)
         )
