@@ -71,7 +71,7 @@ class BuildsMatrixer(BaseModel):
         mobility_sub_graph = matrix_utils.get_subgraph(
             self.nx_intermodal_graph.copy(),
             "type",
-            [t.value for t in (GraphType.PUBLIC_TRANSPORT.edges, GraphType.WALK.edges)],
+            [t.value for t in (GraphType.PUBLIC_TRANSPORT.edges + GraphType.WALK.edges)],
         )
 
         nk_graph = matrix_utils.convert_nx2nk(
