@@ -1,5 +1,3 @@
-import logging
-
 import geopandas as gpd
 import momepy
 import networkx as nx
@@ -7,6 +5,7 @@ import numpy as np
 import osm2geojson
 import osmnx.graph as ox_graph
 import pandas as pd
+from loguru import logger
 from shapely import LineString, Point, geometry
 from tqdm.auto import tqdm
 
@@ -28,7 +27,11 @@ tqdm.pandas()
 def join_graph(G_base: nx.MultiDiGraph, G_to_project: nx.MultiDiGraph, points_df: pd.DataFrame) -> nx.MultiDiGraph:
 
     new_nodes = points_df.set_index("node_id_to_project")["connecting_node_id"]
-    for n1, n2, d in tqdm(G_to_project.edges(data=True)):
+    for n1, n2, d in tqdm(
+        G_to_project.edges(data=True),
+        desc=f"Joining {G_base.graph.get('graph_type')} and {G_to_project.graph.get('graph_type')}",
+        leave=False,
+    ):
         G_base.add_edge(int(new_nodes[n1]), int(new_nodes[n2]), **d)
         nx.set_node_attributes(
             G_base,
@@ -48,7 +51,7 @@ def get_osmnx_graph(
     boundary = osm2geojson.json2geojson(boundary)
     boundary = gpd.GeoDataFrame.from_features(boundary["features"]).set_crs(4326)
 
-    logging.info("Extracting and preparing %s graph from OSM", graph_type)
+    logger.debug("Extracting and preparing {} graph from OSM ...", graph_type)
     G_ox = ox_graph.graph_from_polygon(polygon=boundary["geometry"][0], network_type=graph_type)
     G_ox.graph["approach"] = "primal"
 
@@ -70,7 +73,7 @@ def get_osmnx_graph(
     if not speed:
         speed = 4 * 1000 / 60 if graph_type == "walk" else 17 * 1000 / 60
     G = nx.MultiDiGraph()
-    for _, edge in tqdm(edges.iterrows(), total=len(edges), desc=f"Collecting {graph_type} graph"):
+    for _, edge in tqdm(edges.iterrows(), total=len(edges), desc=f"Collecting {graph_type} graph", leave=False):
         p1 = int(edge.node_start)
         p2 = int(edge.node_end)
         geom = (
@@ -105,7 +108,7 @@ def get_osmnx_graph(
 def public_routes_to_edges(city_osm_id, city_crs, transport_type, speed, boundary, use_boundary: bool):
     routes = overpass_request(get_routes, city_osm_id, transport_type)
     try:
-        tqdm.pandas(desc=f"Extracting and preparing {transport_type} routes from OSM", postfix=None)
+        tqdm.pandas(desc=f"Extracting and preparing {transport_type} routes from OSM", postfix=None, leave=False)
         df_routes: gpd.GeoDataFrame = routes.progress_apply(
             lambda x: parse_overpass_route_response(x, city_crs, boundary, use_boundary),
             axis=1,
@@ -114,8 +117,8 @@ def public_routes_to_edges(city_osm_id, city_crs, transport_type, speed, boundar
         df_routes = gpd.GeoDataFrame(df_routes).dropna(subset=["way"]).set_geometry("way")
 
     except (KeyError, ZeroDivisionError):
-        logging.warning(
-            "It seems there are no %s routes in the city. This transport type will be skipped.", transport_type
+        logger.warning(
+            "It seems there are no {} routes in the city. This transport type will be skipped.", transport_type
         )
         return []
 
@@ -166,7 +169,7 @@ def graphs_spatial_union(
             lambda x: x.edge_id[0] if x.len_from_start == 0 else x.edge_id[1], axis=1
         )
     except ValueError:
-        logging.warning("No matching nodes were detected, seems like your data is not the same as in OSM.")
+        logger.warning("No matching nodes were detected, seems like your data is not the same as in OSM.")
 
     updated_G_base, points_on_lines = update_edges(points_on_lines, G_base)  # pylint: disable=invalid-name
     points_df = pd.concat([points_on_lines, points_on_points])
@@ -199,7 +202,7 @@ def get_public_trasport_graph(
     #         from_file = True
 
     if not from_file:
-        logging.warning("Files with routes or with stops was not found. The graph will be built based on data from OSM")
+        logger.warning("Files with routes or with stops was not found. The graph will be built based on data from OSM")
         boundary = overpass_request(get_boundary, city_osm_id)
         boundary = osm2geojson.json2geojson(boundary)
         boundary = geometry.shape(boundary["features"][0]["geometry"])
@@ -208,18 +211,18 @@ def get_public_trasport_graph(
             edges = public_routes_to_edges(city_osm_id, city_crs, transport_type, speed, boundary, use_boundary)
             edegs_different_types.extend(edges)
     else:
-        logging.info("Getting public routes data from files %s", ", ".join(gdf_files.values()))
+        logger.info("Getting public routes data from files %s", ", ".join(gdf_files.values()))
         for transport_type, speed in transport_types_speed.items():
             files = gdf_files.get(transport_type)
             if not files.get("routes") or not files.get("stops"):
-                logging.warning('No data provided for "{transport_type}", skipping this transport type')
+                logger.warning('No data provided for "{transport_type}", skipping this transport type')
                 continue
             edges = public_routes_to_edges_from_file(city_crs, transport_type, speed, files)
             edegs_different_types.extend(edges)
 
     G.add_edges_from(edegs_different_types)
     if len(edegs_different_types) == 0:
-        logging.warning("No data found for public transport, this graph will be empty.\n")
+        logger.warning("No data found for public transport, this graph will be empty.")
         return G
 
     node_attributes = {
@@ -245,7 +248,7 @@ def get_public_trasport_graph(
     G.graph["graph_type"] = "public transport graph"
     G.graph.update({k + " speed": round(v, 2) for k, v in transport_types_speed.items()})
 
-    logging.info("Public transport graph done!")
+    logger.info("Public transport graph done!")
     return G
 
 
@@ -299,10 +302,10 @@ def public_routes_to_edges_from_file(
                 }
                 edges.append((p1, p2, d))
     except KeyError:
-        logging.error(
+        logger.error(
             "The 'route' column was not found in one of the files for '%s' . Please check their contents.",
             transport_type,
         )
     except Exception as err:  # pylint: disable=broad-except
-        logging.error('File with routes or with stops was not found for "%s", error: %s', transport_type, repr(err))
+        logger.error('File with routes or with stops was not found for "%s", error: %s', transport_type, repr(err))
     return edges

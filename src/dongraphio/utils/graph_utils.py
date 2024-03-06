@@ -6,9 +6,6 @@ import osmnx as ox
 import pandas as pd
 import shapely.ops as geom_ops
 from shapely import LineString, Point, wkt
-from tqdm import tqdm
-
-tqdm.pandas()
 
 
 def parse_overpass_route_response(loc: dict, city_crs: int, boundary: gpd.GeoDataFrame, use_boundary: bool):

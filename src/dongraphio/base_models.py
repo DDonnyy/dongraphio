@@ -1,12 +1,11 @@
-import logging
 from typing import Literal, Optional, Tuple
 
 import geopandas as gpd
 import networkit as nk
 import networkx as nx
-import numpy as np
 import pandas as pd
 import shapely
+from loguru import logger
 from pydantic import BaseModel, InstanceOf
 from tqdm.auto import tqdm
 
@@ -34,7 +33,7 @@ class BuildsGrapher(BaseModel):
         G_drive: nx.MultiDiGraph = graphs.get_osmnx_graph(
             self.city_osm_id, self.city_crs, "drive", speed=self.drive_speed
         )
-        logging.info("Preparing union of city_graphs...")
+        logger.debug("Preparing union of city_graphs...")
         nx_intermodal_graph: nx.MultiDiGraph = graphs.graphs_spatial_union(G_walk, G_drive)
         if G_public_transport.number_of_edges() > 0:
             nx_intermodal_graph: nx.MultiDiGraph = graphs.graphs_spatial_union(nx_intermodal_graph, G_public_transport)
@@ -54,7 +53,7 @@ class BuildsGrapher(BaseModel):
         nx_intermodal_graph.graph["graph_type"] = "intermodal graph"
         nx_intermodal_graph.graph["car speed"] = G_drive.graph["car speed"]
         nx_intermodal_graph.graph.update({k: v for k, v in G_public_transport.graph.items() if "speed" in k})
-        logging.info("Intermodal graph done!")
+        logger.info("Intermodal graph done!\n")
         return nx_intermodal_graph
 
 
@@ -89,19 +88,11 @@ class BuildsMatrixer(BaseModel):
         )
         distance_matrix = pd.DataFrame(0, index=to_services[0][1], columns=from_houses[0][1])
 
-        splited_matrix = np.array_split(
-            distance_matrix.copy(deep=True),
-            int(len(distance_matrix) / 1000) + 1,
-        )
-
         # TODO use a* instead of dijkstra?
-        logging.info("Calculating distances from buildings to services")
-        for i in range(len(splited_matrix)):  # pylint: disable=consider-using-enumerate
-            r = nk.distance.SPSP(G=nk_graph, sources=splited_matrix[i].index.values).run()
-            splited_matrix[i] = splited_matrix[i].apply(lambda x: matrix_utils.get_nk_distances(r, x), axis=1)
-            del r
-        distance_matrix: pd.DataFrame = pd.concat(splited_matrix)
-        del splited_matrix
+        logger.debug("Calculating distances from buildings to services ...")
+        r = nk.distance.SPSP(G=nk_graph, sources=distance_matrix.index.values).run()
+        distance_matrix = distance_matrix.apply(lambda x: matrix_utils.get_nk_distances(r, x), axis=1)
+        del r
         distance_matrix.index = services_to.index
         distance_matrix.columns = buildings_from.index
         return distance_matrix
@@ -146,7 +137,7 @@ class BuildsAvailabilitier(BaseModel):
         )
 
         nk_dists = nk.distance.SPSP(G=nk_graph, sources=distances.index.values).run()
-        logging.info("Calculating distances from the specified point...")
+        logger.debug("Calculating distances from the specified point...")
         distances = distances.apply(lambda x: _get_nk_distances(nk_dists, x), axis=1)
 
         dist_nearest = pd.DataFrame(data=from_sources[1], index=from_sources[0][1], columns=["dist"])
@@ -156,7 +147,7 @@ class BuildsAvailabilitier(BaseModel):
 
         distances = distances[distances[source_index[0]] <= self.weight_value]
 
-        logging.info("Building isochrones geometry...")
+        logger.debug("Building isochrones geometry...")
         distances["geometry"] = distances.apply(
             lambda x: (
                 graph_gdf.loc[x.index].geometry.buffer(round(self.weight_value - x, 2) * walk_speed * 0.8)

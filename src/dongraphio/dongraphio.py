@@ -1,14 +1,12 @@
-import logging
 from typing import Optional, Tuple
 
 import geopandas as gpd
 import networkx as nx
 import pandas as pd
+from loguru import logger
 
 from .base_models import BuildsAvailabilitier, BuildsGrapher, BuildsMatrixer
 from .enums import GraphType
-
-logging.basicConfig(level=logging.INFO)
 
 
 class DonGraphio:
@@ -60,6 +58,7 @@ class DonGraphio:
         """
         # if not all(graph_type in self.graphs for graph_type in GraphType):
         #     raise ValueError("Some graph types are missing")
+        logger.info("Creating intermodal graph from OSM...")
         self._intermodal_graph = BuildsGrapher(
             city_osm_id=city_osm_id, city_crs=self.city_crs, keep_city_boundary=keep_city_boundary
         ).get_intermodal_graph()
@@ -83,14 +82,16 @@ class DonGraphio:
         """
         if self._intermodal_graph is None:
             raise RuntimeError("No graph has set, call get_intermodal_graph_from_osm() or set it by set_graph()")
-
-        return BuildsMatrixer(
+        logger.info("Creating adjacency matrix based on provided graph...")
+        to_return = BuildsMatrixer(
             buildings_from=buildings_from,
             services_to=services_to,
             weight=weight,
             city_crs=self.city_crs,
             nx_intermodal_graph=self._intermodal_graph,
         ).get_adjacency_matrix()
+        logger.info("Adjacency matrix done!")
+        return to_return
 
     def get_accessibility_isochrones(
         self, graph_type: list[GraphType], x_from: float, y_from: float, weight_value: int, weight_type: str
@@ -115,7 +116,8 @@ class DonGraphio:
         if self._intermodal_graph is None:
             raise RuntimeError("No graph has set, call get_intermodal_graph_from_osm() or set it by set_graph()")
         # Build accessibility isochrones
-        return BuildsAvailabilitier(
+        logger.info("Creating accessibility isochrones based on provided graph and point...")
+        to_return = BuildsAvailabilitier(
             graph_type=graph_type,
             city_crs=self.city_crs,
             x_from=x_from,
@@ -124,3 +126,5 @@ class DonGraphio:
             weight_type=weight_type,
             nx_intermodal_graph=self._intermodal_graph,
         ).get_accessibility_isochrone()
+        logger.info("Accessibility isochrones done!\n")
+        return to_return
