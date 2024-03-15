@@ -63,6 +63,7 @@ class BuildsMatrixer(BaseModel):
     weight: Literal["time_min", "length_meter"]
     city_crs: int
     nx_intermodal_graph: InstanceOf[nx.DiGraph]
+    graph_type: Optional[list[GraphType]] = [GraphType.WALK,GraphType.PUBLIC_TRANSPORT]
 
     def get_adjacency_matrix(self) -> pd.DataFrame:
         buildings_from = self.buildings_from.to_crs(self.city_crs)
@@ -70,7 +71,7 @@ class BuildsMatrixer(BaseModel):
         mobility_sub_graph = matrix_utils.get_subgraph(
             self.nx_intermodal_graph.copy(),
             "type",
-            [t.value for t in (GraphType.PUBLIC_TRANSPORT.edges + GraphType.WALK.edges)],
+            [t.value for t in sum([t.edges for t in self.graph_type], [])],
         )
 
         nk_graph = matrix_utils.convert_nx2nk(
