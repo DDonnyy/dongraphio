@@ -45,14 +45,20 @@ def join_graph(G_base: nx.MultiDiGraph, G_to_project: nx.MultiDiGraph, points_df
 
 
 def get_osmnx_graph(
-    city_osm_id: int, city_crs: int, graph_type: str, speed: int | float | None = None
+    city_osm_id: int,
+    city_crs: int,
+    graph_type: str,
+    speed: int | float | None = None,
+    truncate_by_edge: bool | None = False,
 ) -> nx.MultiDiGraph:
     boundary = overpass_request(get_boundary, city_osm_id)
     boundary = osm2geojson.json2geojson(boundary)
     boundary = gpd.GeoDataFrame.from_features(boundary["features"]).set_crs(4326)
 
     logger.debug("Extracting and preparing {} graph from OSM ...", graph_type)
-    G_ox = ox_graph.graph_from_polygon(polygon=boundary["geometry"][0], network_type=graph_type)
+    G_ox = ox_graph.graph_from_polygon(
+        polygon=boundary["geometry"][0], network_type=graph_type, truncate_by_edge=truncate_by_edge
+    )
     G_ox.graph["approach"] = "primal"
 
     nodes: gpd.GeoDataFrame
