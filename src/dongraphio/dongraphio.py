@@ -65,7 +65,8 @@ class DonGraphio:
         return self._intermodal_graph
 
     def get_adjacency_matrix(
-        self, buildings_from: gpd.GeoDataFrame, services_to: gpd.GeoDataFrame, weight: str
+            self, buildings_from: gpd.GeoDataFrame, services_to: gpd.GeoDataFrame, weight: str,
+            graph_type: list[GraphType] | None = None,
     ) -> Optional[pd.DataFrame]:
         """
         Calculate the adjacency matrix between the given GeoDataFrames based on
@@ -75,6 +76,7 @@ class DonGraphio:
             buildings_from (gpd.GeoDataFrame): The GeoDataFrame containing the buildings.
             services_to (gpd.GeoDataFrame): The GeoDataFrame containing the services.
             weight (str): The weight attribute, could be only "time_min" or"length_meter".
+            graph_type (list[GraphType]): The List of Enum types of the graph to search shortest way.
         Returns:
             Optional[pd.DataFrame]: The adjacency matrix as a DataFrame, or None if the intermodal graph is not set.
         Raises:
@@ -89,6 +91,7 @@ class DonGraphio:
             weight=weight,
             city_crs=self.city_crs,
             nx_intermodal_graph=self._intermodal_graph,
+            graph_type=graph_type
         ).get_adjacency_matrix()
         logger.info("Adjacency matrix done!")
         return to_return
