@@ -4,8 +4,8 @@ import geopandas as gpd
 import networkx as nx
 import osmnx as ox
 import pandas as pd
-import shapely.ops as geom_ops
-from shapely import LineString, Point, wkt
+from shapely import LineString, Point, wkt, from_wkt
+from shapely.ops import split, substring, nearest_points
 
 
 def parse_overpass_route_response(loc: dict, city_crs: int, boundary: gpd.GeoDataFrame, use_boundary: bool):
@@ -44,7 +44,7 @@ def project_platforms(loc, city_crs):
 
     if platforms is not None:
         platforms = gpd.GeoSeries(platforms).set_crs(4326).to_crs(city_crs)
-        stops = platforms.apply(lambda x: geom_ops.nearest_points(line, x)[0])
+        stops = platforms.apply(lambda x: nearest_points(line, x)[0])
         stops = gpd.GeoDataFrame(stops).rename(columns={0: "geometry"}).set_geometry("geometry")
         stops = _recursion(stops, project_threshold)
 
@@ -97,7 +97,7 @@ def get_nearest_edge_geometry(points, G):
 def project_point_on_edge(points_edge_geom):
 
     points_edge_geom["nearest_point_geometry"] = points_edge_geom.apply(
-        lambda x: geom_ops.nearest_points(x.edge_geometry, x.geometry)[0], axis=1
+        lambda x: nearest_points(x.edge_geometry, x.geometry)[0], axis=1
     )
     points_edge_geom["len"] = points_edge_geom.apply(lambda x: x.edge_geometry.length, axis=1)
     points_edge_geom["len_from_start"] = points_edge_geom.apply(lambda x: x.edge_geometry.project(x.geometry), axis=1)
@@ -214,7 +214,7 @@ def _get_linestring(route):
     for i in range(len(sequence) - 1):
         line1 = comlete_line[i]
         line2 = route.geometry[sequence[i + 1]]
-        _con_point1, con_point2 = geom_ops.nearest_points(line1, line2)
+        _con_point1, con_point2 = nearest_points(line1, line2)
 
         line2 = list(line2.coords)
         check_reverse = gpd.GeoSeries([Point(line2[0]), Point(line2[-1])]).distance(con_point2).idxmin()
@@ -329,12 +329,12 @@ def _generate_nodes_bunch(split_point):
 
     fst_edge_attr = {
         "length_meter": len_from_start,
-        "geometry": str(geom_ops.substring(edge_geom_, 0, len_from_start)),
+        "geometry": str(substring(edge_geom_, 0, len_from_start)),
         "type": "walk",
     }
     snd_edge_attr = {
         "length_meter": len_to_end,
-        "geometry": str(geom_ops.substring(edge_geom_, len_from_start, len_edge)),
+        "geometry": str(substring(edge_geom_, len_from_start, len_edge)),
         "type": "walk",
     }
     edge_pair.extend(
@@ -374,3 +374,66 @@ def _add_connecting_edges(G: nx.Graph, split_nodes: gpd.GeoDataFrame) -> tuple[n
     G.add_edges_from(conn_edges.tolist() + conn_edges_another_direct.tolist())
     nx.set_node_attributes(G, nodes_attr)
     return G, split_nodes
+
+
+def project_points_on_graph(graph: nx.Graph, points_to_project: gpd.GeoDataFrame) -> pd.DataFrame:
+
+    for i in graph.edges(data=True):
+        i[2]["geometry"] = from_wkt(str(i[2]["geometry"]))
+
+    gdf_graph_edges = ox.graph_to_gdfs(graph, nodes=False)
+    gdf_graph_edges: gpd.GeoDataFrame = gdf_graph_edges.reset_index()
+    gdf_graph_edges_buffer = gdf_graph_edges.copy()
+    gdf_graph_edges_buffer["geometry"] = gdf_graph_edges_buffer["geometry"].apply(
+        lambda x: LineString(x).buffer(-3, single_sided=True)
+    )
+    join = gpd.sjoin_nearest(points_to_project, gdf_graph_edges_buffer, distance_col="dist", how="inner")
+
+    projected_points = pd.DataFrame(data=None)
+
+    for _, row in join.iterrows():
+        point: Point = row["geometry"]
+        edges_to_delete, start, end = row[["index_right", "u", "v"]]
+        line: LineString = gdf_graph_edges.loc[edges_to_delete, "geometry"]
+        nearest_point = line.interpolate(line.project(point))
+        graph_data = (str(edges_to_delete) + "_" + row["label"], start, end)
+        projected_points = pd.concat(
+            [projected_points, pd.DataFrame({"edge": [graph_data], "geometry": [nearest_point]})]
+        )
+
+    projected_points = projected_points.groupby("edge")["geometry"].apply(list).reset_index()
+    return projected_points
+
+
+def add_projected_points_as_nodes(projected_points: pd.DataFrame, graph: nx.Graph) -> (list[tuple], nx.Graph):
+    new_graph = graph.copy()
+    route_nodes = []
+    for _, row in projected_points.iterrows():
+        label, start, end = row["edge"]
+        new_points = row["geometry"].copy()
+        postfix = 1
+        current_edge = new_graph.get_edge_data(start, end)[0]["geometry"]
+        current_node = graph.nodes[start]
+        current_node = Point(current_node["x"], current_node["y"])
+        length = len(new_points)
+        new_node_name = None
+        while len(new_points) > 0:
+            new_node = min(new_points, key=current_node.distance)
+
+            new_node_name = label + (("_" + str(postfix)) if length > 1 else "")
+            route_nodes.append((new_node_name, start, end))
+            new_graph.add_node(new_node_name, x=new_node.x, y=new_node.y, desc="bus_stop")
+
+            first, _, second = split(current_edge, new_node.buffer(0.0001)).geoms
+
+            new_edge = LineString(list(first.coords[:-1]) + list(new_node.coords))
+            new_graph.add_edge(start, new_node_name, length_meter=new_edge.length, geometry=new_edge)
+
+            start = new_node_name
+            current_edge = LineString(list(new_node.coords) + list(second.coords[1:]))
+            current_node = new_node
+            new_points.remove(new_node)
+            postfix = postfix + 1
+
+        new_graph.add_edge(new_node_name, end, length_meter=current_edge.length, geometry=current_edge)
+    return route_nodes, new_graph

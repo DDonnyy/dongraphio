@@ -3,6 +3,7 @@ import networkx as nx
 import pandas as pd
 import shapely.geometry
 import shapely.wkt
+from tqdm.auto import tqdm
 
 
 def get_subgraph(G_nx: nx.Graph, attr, value):
@@ -63,3 +64,41 @@ def get_nk_distances(nk_dists, loc):  # ?
     source_node = loc.name
     distances = [nk_dists.getDistance(source_node, node) for node in target_nodes]
     return pd.Series(data=distances, index=target_nodes)
+
+
+def get_dist_matrix(
+    graph: nx.Graph, nodes_from: [], nodes_to: [], path_matrix=False, weight: str = "length_meter"
+) -> (pd.DataFrame, pd.DataFrame | None):
+    graph = nx.DiGraph(graph)
+    mapping = get_nx2nk_idmap(graph)
+    nk_graph = nk.nxadapter.nx2nk(graph, weight)
+
+    distance_matrix = pd.DataFrame(0, index=nodes_from, columns=nodes_to).astype(object)
+    if path_matrix:
+        route_matrix = pd.DataFrame(index=nodes_from, columns=nodes_to)
+    for source in tqdm(nodes_from, total=len(nodes_from), desc="Calculating distance matrix"):
+        for dest in nodes_to:
+            biDij = nk.distance.BidirectionalDijkstra(nk_graph, mapping.get(source), mapping.get(dest), True).run()
+            path = biDij.getPath()
+            path.insert(0,source)
+            path.append(dest)
+            total_distance = biDij.getDistance()
+            if path_matrix:
+                route_matrix.loc[source, dest] = path
+            distance_matrix.loc[source, dest] = total_distance
+    if path_matrix:
+        return distance_matrix, route_matrix
+    return distance_matrix
+
+
+def get_dist_matrix_for_tsp(graph: nx.Graph, route_nodes: list[tuple]) -> (pd.DataFrame, pd.DataFrame):
+    route_nodes_ind = [x[0] for x in route_nodes]
+    distance_matrix, route_matrix = get_dist_matrix(graph, route_nodes_ind, route_nodes_ind, True)
+    max_value = distance_matrix.values.max()
+    for i in route_nodes:
+        node_1, n1_1, n2_1 = i
+        for j in route_nodes:
+            node_2, n1_2, n2_2 = j
+            if (n1_1, n2_1) == (n2_2, n1_2):
+                distance_matrix.loc[node_1, node_2] = max_value
+    return distance_matrix, route_matrix

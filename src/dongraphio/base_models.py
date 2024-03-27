@@ -10,7 +10,7 @@ from pydantic import BaseModel, InstanceOf
 from tqdm.auto import tqdm
 
 from .enums import GraphType
-from .utils import graphs, matrix_utils
+from .utils import graphs, matrix_utils, graph_utils
 
 tqdm.pandas()
 
@@ -138,6 +138,7 @@ class BuildsAvailabilitier(BaseModel):
         )
 
         nk_dists = nk.distance.SPSP(G=nk_graph, sources=distances.index.values).run()
+
         logger.debug("Calculating distances from the specified point...")
         distances = distances.apply(lambda x: _get_nk_distances(nk_dists, x), axis=1)
 
@@ -206,3 +207,8 @@ class BuildsAvailabilitier(BaseModel):
         routes_result = gpd.GeoDataFrame(data=routes_result[0], geometry="geometry")
         stops_result = gpd.GeoDataFrame(data=stops_result[0], geometry="geometry")
         return stops_result, routes_result
+
+class TSPsolver(BaseModel):
+
+   def get_tsp_way(self):
+       print("tsp")

@@ -8,7 +8,7 @@ readme = "README.md"
 packages = [{ include = "dongraphio", from = "src" }]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.9"
 geopandas = "^0.14.3"
 osmnx = "^1.9.1"
 tqdm = "^4.66.2"
@@ -20,6 +20,7 @@ numpy = "^1.23.5"
 pandas = "^2.2.0"
 networkx = "^3.2.1"
 loguru = "^0.7.2"
+ortools = "^9.9.3963"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.2.0"
