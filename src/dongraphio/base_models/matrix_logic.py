@@ -55,7 +55,11 @@ class BuildsMatrixer(BaseModel):
         )
 
         distance_matrix_result = distance_matrix_result.apply(pd.to_numeric, errors="coerce")
-        distance_matrix.update(distance_matrix_result)
+        def update_value(ind, col):
+            if ind in distance_matrix_result.index and col in distance_matrix_result.columns:
+                return distance_matrix_result.loc[ind, col]
+
+        distance_matrix = distance_matrix.apply(lambda x: x.index.map(lambda ind: update_value(ind, x.name)))
         distance_matrix.index = self.gdf_from.index
         distance_matrix.columns = self.gdf_to.index
         return distance_matrix
