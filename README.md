@@ -17,7 +17,7 @@ nx.write_graphml(intermodal_graph,"city_intermodal.graphml")
 
 builds_from = gpd.read_file("test_data/buildings.geojson")
 services_to = gpd.read_file("test_data/services.geojson")
-adjacency_matrix = dongrph.get_adjacency_matrix(buildings_from=builds_from, services_to=services_to, weight="time_min")
+adjacency_matrix = dongrph.get_adjacency_matrix(gdf_from=builds_from, gdf_to=services_to, weight="time_min")
 adjacency_matrix.to_csv("city_adjacency_matrix.csv")
 
 accessibility_isochrones, public_transport_routes, public_transport_stops = dongrph.get_accessibility_isochrones(
