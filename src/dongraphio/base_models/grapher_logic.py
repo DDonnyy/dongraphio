@@ -21,13 +21,63 @@ from ..utils import (
     project_platforms,
     project_point_on_edge,
     update_edges,
+    join_graph,
 )
 
 pd.options.mode.chained_assignment = None
 tqdm.pandas()
+# TODO Сборщик графа необходимо переписать в соответствии с новыми требованиями:
+"""
+По поводу соединения из осм
+
+0. Необходимо рассмотреть все виды highway из осм и определить что является для нас walk а что drive. 
+В связи с чем предлагаю расширить наш граф атрибутами помимо car walk и тд. Полезно для отделения сабграфов из интермодального
+
+----------------
+ОБРАТИТЬ ВНИМАНИЕ! В OSM есть типы edge, относящиеся к двум и более разными типам,лежащим в списке, например:
+    - 'service'
+    - ['service', 'residential']
+    - ['service', 'living_street', 'residential']
+----------------
+1. Грузим из осм через osmnx “all_private” (Это вообще все дороги)
+2. Выделяем все что мы определили для car, помечаем его как “car” or “drive” , закидывает в автомобильный граф и забываем про него 
+3. Все что является ТОЛЬКО пешеходным помечаем атрибутом “walk”, а всё остальное помечаем «walk+drive» и закидываем в пешеходный граф. 
+Таким образом при рассмотрении пешеходного, можно будет определить, где реально пешеходка, а где пешеходка по автодорогам
+
+4. Собираем направленные графы по транспорту с сохранением номеров маршрутов 
+
+Далее сбор транспорт+пешком
+
+5. Для каждой ноды транспортного графа находим ближайшую ноду только пешеходного (не walk+car) и рисуем эджу,
+ добавляя в length_meter и time_min соотвествующие значения по евклидову расстоянию.
+  Тут необходимо сделать лимит расстояния, тип метров 20-50
+
+6. Для каждой ноды(остановки) транспортного графа для которой не нашлось ближайшего соседа по пешеходному,
+ находим соседа по «car+walk», тут можно без лимита, лишь бы соединилась. Рисуем Эджи, добавляем соотвествующие атрибуты.
+ 
+
+В целом текущий код (как я понимаю) не разделяет маршрут из осм на "туда-обратно", если это разделение добавить+ убрать слияние остановок
+ + сохранять геометрию и номер маршрута, то должно получиться хорошо. 
 
 
-class BuildsGrapher(BaseModel):
+"""
+
+
+class OSMGrapher(BaseModel):
+    """
+    OSMGrapher class for generating intermodal graphs from OpenStreetMap.
+
+    Args:
+        city_osm_id (int): The OpenStreetMap ID of the city.
+        city_crs (int): The Coordinate Reference System (CRS) for the city.
+        keep_city_boundary (bool, optional): Indicates whether to keep the city boundary. Defaults to True.
+        public_transport_speeds (Optional[dict], optional): Speeds for public transport. Defaults to None.
+        walk_speed (Optional[dict], optional): Speeds for walking. Defaults to None.
+        drive_speed (Optional[dict], optional): Speeds for driving. Defaults to None.
+        gdf_files (Optional[dict], optional): GeoDataFrame files. Defaults to None.
+        truncate_by_edge (Optional[bool], optional): Truncate by edge flag. Defaults to False.
+    """
+
     city_osm_id: int
     city_crs: int
     keep_city_boundary: bool = True
@@ -38,15 +88,19 @@ class BuildsGrapher(BaseModel):
     truncate_by_edge: Optional[bool] = False
 
     def get_intermodal_graph(self) -> nx.MultiDiGraph:
-        G_public_transport = self.get_public_trasport_graph()
+        G_public_transport = self.get_public_trasport_graph()  # TODO переписать всё что внутри
 
-        G_walk: nx.MultiDiGraph = self.get_osmnx_graph("walk", self.walk_speed)
+        G_walk: nx.MultiDiGraph = self.get_osmnx_graph("walk", self.walk_speed)  # TODO при скачивании 'walk' скачивается drive в т.ч, предлагаю скачивать 'all_private' и далее разделять
 
-        G_drive: nx.MultiDiGraph = self.get_osmnx_graph("drive", self.drive_speed)
+        G_drive: nx.MultiDiGraph = self.get_osmnx_graph("drive", self.drive_speed) #TODO убрать
         logger.debug("Preparing union of city_graphs...")
-        nx_intermodal_graph: nx.MultiDiGraph = self.graphs_spatial_union(G_walk, G_drive)
+
+        nx_intermodal_graph: nx.MultiDiGraph = self.graphs_spatial_union(G_walk, G_drive) #TODO spatial_union - чёрный ящик, я хз что это и как работает,убрать/переписать/упростить
         if G_public_transport.number_of_edges() > 0:
             nx_intermodal_graph: nx.MultiDiGraph = self.graphs_spatial_union(nx_intermodal_graph, G_public_transport)
+
+        #TODO ввести Enums для хранения всех видом транспорта и их средних скоростей
+        #TODO добавить функцию пересчёта time_min для вида траснпорта и новой скорости.
 
         for _u, _v, d in nx_intermodal_graph.edges(data=True):
             if "time_min" not in d:
@@ -66,27 +120,6 @@ class BuildsGrapher(BaseModel):
         logger.info("Intermodal graph done!\n")
         return nx_intermodal_graph
 
-    def join_graph(
-        self, G_base: nx.MultiDiGraph, G_to_project: nx.MultiDiGraph, points_df: pd.DataFrame
-    ) -> nx.MultiDiGraph:
-
-        new_nodes = points_df.set_index("node_id_to_project")["connecting_node_id"]
-        for n1, n2, d in tqdm(
-            G_to_project.edges(data=True),
-            desc=f"Joining {G_base.graph.get('graph_type')} and {G_to_project.graph.get('graph_type')}",
-            leave=False,
-        ):
-            G_base.add_edge(int(new_nodes[n1]), int(new_nodes[n2]), **d)
-            nx.set_node_attributes(
-                G_base,
-                {
-                    int(new_nodes[n1]): G_to_project.nodes[n1],
-                    int(new_nodes[n2]): G_to_project.nodes[n2],
-                },
-            )
-
-        return G_base
-
     def get_osmnx_graph(self, graph_type: str, speed: Optional[dict]) -> nx.MultiDiGraph:
         boundary = overpass_request(get_boundary, self.city_osm_id)
         boundary = osm2geojson.json2geojson(boundary)
@@ -100,7 +133,7 @@ class BuildsGrapher(BaseModel):
 
         nodes: gpd.GeoDataFrame
         edges: gpd.GeoDataFrame
-        nodes, edges = momepy.nx_to_gdf(G_ox, points=True, lines=True, spatial_weights=False)
+        nodes, edges = momepy.nx_to_gdf(G_ox, points=True, lines=True, spatial_weights=False) #TODO Зачем momepy? Убрать зависимость, юзать nx_to_gdf из graph_utils, если надо nx to gdf
         nodes = nodes.to_crs(self.city_crs).set_index("nodeID")
         nodes_coord = nodes.geometry.apply(
             lambda p: {"x": round(p.coords[0][0], 2), "y": round(p.coords[0][1], 2)}
@@ -111,6 +144,8 @@ class BuildsGrapher(BaseModel):
         edges["geometry"] = edges["geometry"].apply(
             lambda x: LineString([tuple(round(c, 2) for c in n) for n in x.coords] if x else None)
         )
+
+        # TODO Очень долгий процесс ниже, не считаю нужным гонять граф в гдф и обратно, можно разибраться со скаченным графом на месте
 
         travel_type = "walk" if graph_type == "walk" else "car"
         if not speed:
@@ -147,6 +182,7 @@ class BuildsGrapher(BaseModel):
 
         return G
 
+    #TODO чёрный ящик как и все последующие функции, переписать скорее всего.
     def public_routes_to_edges(self, transport_type, speed, boundary, use_boundary: bool):
         routes = overpass_request(get_routes, self.city_osm_id, transport_type)
         try:
@@ -214,20 +250,20 @@ class BuildsGrapher(BaseModel):
 
         updated_G_base, points_on_lines = update_edges(points_on_lines, G_base)  # pylint: disable=invalid-name
         points_df = pd.concat([points_on_lines, points_on_points])
-        united_graph = self.join_graph(updated_G_base, G_to_project, points_df)
+        united_graph = join_graph(updated_G_base, G_to_project, points_df)
         return united_graph
 
     def get_public_trasport_graph(self) -> nx.MultiDiGraph:
         graph = nx.MultiDiGraph()
         edegs_different_types = []
         if not self.public_transport_speeds:
-            self.public_transport_speeds = {  # TODO add enum in future version
+            self.public_transport_speeds = {  # TODO то о чём писал выше, это должно быть в Enums
                 "subway": 12 * 1000 / 60,
                 "tram": 15 * 1000 / 60,
                 "trolleybus": 12 * 1000 / 60,
                 "bus": 17 * 1000 / 60,
             }
-        from_file = False  # TODO REMAKE FILE MANAGEMENT SYSTEM
+        from_file = False  # TODO Идею с файлом можно убирать, пока не актуально.
 
         # for transport in gdf_files.values():
         #     if transport.get("stops") or transport.get("routes"):
@@ -285,6 +321,7 @@ class BuildsGrapher(BaseModel):
         logger.info("Public transport graph done!")
         return graph
 
+    # TODO Код работы с файлами можно убирать, пока не актуально.
     def public_routes_to_edges_from_file(
         self, city_crs: int, transport_type: str, speed: int | float, gdf_files: dict[str, str]
     ) -> list[tuple[int, int, dict[str, int | str]]]:

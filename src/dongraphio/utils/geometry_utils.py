@@ -4,7 +4,7 @@ from shapely import Point
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 
-
+# Код рабочий, менять не надо для работы с геометрией функции можно перенести сюда
 def clusterize_kmeans_geo_points(loc: pd.Series, noise_points: [Point]) -> pd.DataFrame:
     data = np.array([[p.x, p.y] for p in loc["geometry"]])
     noise = np.array([[p.x, p.y] for p in noise_points])

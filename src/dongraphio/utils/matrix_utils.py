@@ -4,14 +4,14 @@ import pandas as pd
 
 
 def get_subgraph(G_nx: nx.MultiDiGraph, attr, value):
+    #TODO добавить преобразование DiGraph и других типов в MultiDiGraph и потом обратно в предоставленный тип (Задача Donny).
     return G_nx.edge_subgraph([(u, v, k) for u, v, k, d in G_nx.edges(data=True, keys=True) if d[attr] in value])
-
 
 def get_nx2nk_idmap(G_nx: nx.Graph) -> dict[int, int]:
     idmap = dict((id, u) for (id, u) in zip(G_nx.nodes(), range(G_nx.number_of_nodes())))
     return idmap
 
-
+# Код рабочий, менять не надо
 def get_dist_matrix(
     graph: nx.DiGraph | nx.Graph, nodes_from: [], nodes_to: [], path_matrix=False, weight: str = "length_meter"
 ) -> (pd.DataFrame, pd.DataFrame | None):
@@ -49,15 +49,14 @@ def get_dist_matrix(
     del spsp
     return distance_matrix
 
-
+# Код рабочий, менять не надо
 def get_dist_matrix_for_tsp(graph: nx.DiGraph, route_nodes: list[tuple]) -> (pd.DataFrame, pd.DataFrame):
     route_nodes_ind = [x[0] for x in route_nodes]
     distance_matrix, route_matrix = get_dist_matrix(graph, route_nodes_ind, route_nodes_ind, True)
-    mean_value = distance_matrix.values.mean()
     for i in route_nodes:
         node_1, n1_1, n2_1 = i
         for j in route_nodes:
             node_2, n1_2, n2_2 = j
             if (n1_1, n2_1) == (n2_2, n1_2):
-                distance_matrix.loc[node_1, node_2] = (mean_value+distance_matrix.loc[node_1, node_2])/3
+                distance_matrix.loc[node_1, node_2] = (distance_matrix.loc[node_1, node_2])*2
     return distance_matrix, route_matrix

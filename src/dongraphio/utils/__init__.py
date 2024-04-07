@@ -10,6 +10,7 @@ from .graph_utils import (
     project_points_on_graph,
     subgraph_by_path,
     update_edges,
+    join_graph,
 )
 from .matrix_utils import get_dist_matrix, get_dist_matrix_for_tsp, get_nx2nk_idmap, get_subgraph
 from .osm_worker import get_boundary, get_routes, overpass_request

@@ -6,8 +6,30 @@ import osmnx as ox
 import pandas as pd
 from shapely import LineString, Point, from_wkt, wkt
 from shapely.ops import nearest_points, split, substring, transform
+from tqdm.auto import tqdm
 
+# TODO хз зачем нужно, когда есть nx.compose(). Убрать, если не найдётся применение
+def join_graph(G_base: nx.MultiDiGraph, G_to_project: nx.MultiDiGraph, points_df: pd.DataFrame
+) -> nx.MultiDiGraph:
 
+    new_nodes = points_df.set_index("node_id_to_project")["connecting_node_id"]
+    for n1, n2, d in tqdm(
+        G_to_project.edges(data=True),
+        desc=f"Joining {G_base.graph.get('graph_type')} and {G_to_project.graph.get('graph_type')}",
+        leave=False,
+    ):
+        G_base.add_edge(int(new_nodes[n1]), int(new_nodes[n2]), **d)
+        nx.set_node_attributes(
+            G_base,
+            {
+                int(new_nodes[n1]): G_to_project.nodes[n1],
+                int(new_nodes[n2]): G_to_project.nodes[n2],
+            },
+        )
+
+    return G_base
+
+# TODO чёрный ящик - пересмотреть или убрать
 def parse_overpass_route_response(loc: dict, city_crs: int, boundary: gpd.GeoDataFrame, use_boundary: bool):
     route = pd.DataFrame(loc["members"])
     ways = route[route["type"] == "way"]
@@ -32,7 +54,7 @@ def parse_overpass_route_response(loc: dict, city_crs: int, boundary: gpd.GeoDat
 
     return pd.Series({"way": ways, "platforms": platforms})
 
-
+# TODO чёрный ящик - пересмотреть или убрать
 def project_platforms(loc, city_crs):
 
     project_threshold = 5
@@ -79,7 +101,7 @@ def project_platforms(loc, city_crs):
 
     return pd.Series({"pathes": pathes, "distance": distance})
 
-
+# TODO чёрный ящик - пересмотреть или убрать
 def get_nearest_edge_geometry(points, G):
 
     G = G.edge_subgraph([(u, v, n) for u, v, n, e in G.edges(data=True, keys=True) if e["type"] == "walk"])
@@ -93,7 +115,7 @@ def get_nearest_edge_geometry(points, G):
     edges_geom["distance_to_edge"] = distance
     return pd.concat([points, edges_geom], axis=1)
 
-
+# TODO чёрный ящик - пересмотреть или убрать
 def project_point_on_edge(points_edge_geom):
 
     points_edge_geom["nearest_point_geometry"] = points_edge_geom.apply(
@@ -105,7 +127,7 @@ def project_point_on_edge(points_edge_geom):
 
     return points_edge_geom
 
-
+# TODO чёрный ящик - пересмотреть или убрать
 def update_edges(points_info, G):
 
     G_with_drop_edges = _delete_edges(points_info, G)  # pylint: disable=invalid-name
@@ -113,7 +135,7 @@ def update_edges(points_info, G):
     updated_G, split_points = _add_connecting_edges(updated_G, split_points)  # pylint: disable=invalid-name
     return updated_G, split_points
 
-
+# TODO чёрный ящик - пересмотреть или убрать
 def _get_linestring(route):
     """
     get_linestring(route)
@@ -228,7 +250,7 @@ def _get_linestring(route):
 
     return LineString(comlete_line)
 
-
+# TODO чёрный ящик - пересмотреть или убрать
 def _recursion(stops: gpd.GeoSeries, threshold):
 
     stops["to_del"] = stops.apply(lambda x: _get_index_to_delete(stops, x, threshold), axis=1)
@@ -242,7 +264,7 @@ def _recursion(stops: gpd.GeoSeries, threshold):
 
     return stops.reset_index(drop=True)
 
-
+# TODO чёрный ящик - пересмотреть или убрать
 def _get_index_to_delete(other_stops: gpd.GeoDataFrame, loc_stop: gpd.GeoSeries, threshold: int | float) -> int | None:
 
     stops_to_del = other_stops.geometry.distance(loc_stop.geometry).sort_values().drop(loc_stop.name)
@@ -252,7 +274,7 @@ def _get_index_to_delete(other_stops: gpd.GeoDataFrame, loc_stop: gpd.GeoSeries,
         return stops_to_del[0]
     return None
 
-
+# TODO чёрный ящик - пересмотреть или убрать
 def _get_line_from_start_to_end(line, line_length: int | float):
 
     start_line = gpd.GeoSeries(Point(line.coords[0]))
@@ -262,13 +284,13 @@ def _get_line_from_start_to_end(line, line_length: int | float):
 
     return stops, distance
 
-
+# TODO чёрный ящик - пересмотреть или убрать
 def _convert_geometry(graph):
     for _u, _v, _n, data in graph.edges(data=True, keys=True):
         data["geometry"] = wkt.loads(data["geometry"])
     return graph
 
-
+# TODO чёрный ящик - пересмотреть или убрать
 def _delete_edges(project_points, G):
 
     bunch_edges = []
@@ -285,7 +307,7 @@ def _delete_edges(project_points, G):
 
     return G
 
-
+# TODO чёрный ящик - пересмотреть или убрать
 def _check_parallel_edge(G, u, v, n) -> int:
     if u == v:
         return 1
@@ -295,7 +317,7 @@ def _check_parallel_edge(G, u, v, n) -> int:
         return 1
     return 1
 
-
+# TODO чёрный ящик - пересмотреть или убрать
 def _add_splitted_edges(G, split_nodes):
 
     start_node_idx = max((G.nodes)) + 1
@@ -316,7 +338,7 @@ def _add_splitted_edges(G, split_nodes):
 
     return G, split_nodes
 
-
+# TODO чёрный ящик - пересмотреть или убрать
 def _generate_nodes_bunch(split_point):
 
     edge_pair = []
@@ -348,7 +370,7 @@ def _generate_nodes_bunch(split_point):
 
     return edge_pair
 
-
+# TODO чёрный ящик - пересмотреть или убрать
 def _add_connecting_edges(G: nx.Graph, split_nodes: gpd.GeoDataFrame) -> tuple[nx.Graph, gpd.GeoDataFrame]:
 
     start_node_idx = split_nodes["node_id"].max() + 1
@@ -375,10 +397,25 @@ def _add_connecting_edges(G: nx.Graph, split_nodes: gpd.GeoDataFrame) -> tuple[n
     nx.set_node_attributes(G, nodes_attr)
     return G, split_nodes
 
-
+# TODO Можно использовать, не убирать. Возможно стоит добавить преобразование любого графа в MultiDiGraph, тк ox.graph_to_gdfs кушает только их. Ничего при этом не потеряется.
 def nx_to_gdf(
     graph: nx.MultiDiGraph, nodes: bool = False, edges: bool = False
 ) -> gpd.GeoDataFrame | tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+    """
+    Convert a NetworkX MultiDiGraph to a GeoDataFrame.
+
+    Args:
+        graph (nx.MultiDiGraph): The NetworkX MultiDiGraph to convert.
+        nodes (bool, optional): Flag indicating whether to include nodes. Defaults to False.
+        edges (bool, optional): Flag indicating whether to include edges. Defaults to False.
+
+    Returns:
+        gpd.GeoDataFrame | tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]: The GeoDataFrame containing nodes,
+        edges, or both depending on the input flags.
+
+    Raises:
+        ValueError: If both nodes and edges are set to False.
+    """
     for _, _, data in graph.edges(data=True):
         data["geometry"] = from_wkt(str(data["geometry"]))
 
@@ -395,9 +432,18 @@ def nx_to_gdf(
         return gdf_graph_nodes
     raise ValueError("You must specify either nodes or edges as True.")
 
-
+# TODO Можно использовать, не убирать.
 def buffer_directed_roads(graph_gdf: gpd.GeoDataFrame, buffer: int) -> gpd.GeoDataFrame:
+    """
+    Buffer the directed roads in the GeoDataFrame in perpendicular to direction way.
 
+    Args:
+        graph_gdf (gpd.GeoDataFrame): The GeoDataFrame containing the directed roads.
+        buffer (int): The buffer distance.
+
+    Returns:
+        gpd.GeoDataFrame: The GeoDataFrame with buffered directed roads.
+    """
     gdf_graph_edges_buffer = graph_gdf.copy()
     gdf_graph_edges_buffer["geometry"] = gdf_graph_edges_buffer["geometry"].apply(
         lambda x: LineString(x).buffer(-buffer, single_sided=True)
@@ -405,14 +451,23 @@ def buffer_directed_roads(graph_gdf: gpd.GeoDataFrame, buffer: int) -> gpd.GeoDa
 
     return gdf_graph_edges_buffer
 
-
+# TODO Можно использовать, не убирать.
 def project_points_on_graph(
     graph_gdf_edges: gpd.GeoDataFrame, graph_gdf_edges_buffer: gpd.GeoDataFrame, points_to_project: gpd.GeoDataFrame
 ) -> pd.DataFrame:
+    """
+    Project points onto the graph edges based on the nearest distance.
+
+    Args:
+        graph_gdf_edges (gpd.GeoDataFrame): The GeoDataFrame containing the graph edges.
+        graph_gdf_edges_buffer (gpd.GeoDataFrame): The GeoDataFrame containing the buffered graph edges.
+        points_to_project (gpd.GeoDataFrame): The GeoDataFrame containing points to project.
+
+    Returns:
+        pd.DataFrame: The DataFrame containing the projected points on the graph edges.
+    """
     join = gpd.sjoin_nearest(points_to_project, graph_gdf_edges_buffer, distance_col="dist", how="inner")
-
     projected_points = pd.DataFrame(data=None)
-
     for _, row in join.iterrows():
         point: Point = row["geometry"]
         edges_to_project, start, end, key = row[["index_right", "u", "v", "key"]]
@@ -433,7 +488,7 @@ def _remove_multiedges_except_key(multidigraph: nx.MultiDiGraph, node1, node2, k
         if key != key_to_save:
             multidigraph.remove_edge(node1, node2, key)
 
-
+# TODO Можно использовать, не убирать.
 def add_projected_points_as_nodes(
     projected_points: pd.DataFrame, graph: nx.MultiDiGraph
 ) -> (list[tuple], nx.MultiDiGraph):
@@ -444,7 +499,7 @@ def add_projected_points_as_nodes(
         new_points = row["geometry"].copy()
         postfix = 1
 
-        _remove_multiedges_except_key(new_graph, start, end, key)
+        _remove_multiedges_except_key(new_graph, start, end, key) #TODO Пересмотреть принцип добавления(задача Donny)
 
         current_edge = new_graph.get_edge_data(start, end)[key]["geometry"]
         current_node = graph.nodes[start]
@@ -472,10 +527,19 @@ def add_projected_points_as_nodes(
         new_graph.add_edge(new_node_name, end, length_meter=current_edge.length, geometry=current_edge)
     return route_nodes, new_graph
 
-
+# TODO Можно использовать, не убирать.
 def convert_multidigraph_to_digraph(multidigraph: nx.MultiDiGraph, weight: str = "length_meter") -> nx.DiGraph:
     digraph = nx.DiGraph()
+    """
+    Convert a NetworkX MultiDiGraph to a NetworkX DiGraph, removing longest edges in MultiEdge.
 
+    Args:
+        multidigraph (nx.MultiDiGraph): The MultiDiGraph to convert.
+        weight (str, optional): The edge attribute to use as weight when comparing edges. Defaults to "length_meter".
+
+    Returns:
+        nx.DiGraph: The converted DiGraph.
+    """
     for node, data in multidigraph.nodes(data=True):
         digraph.add_node(node, **data)
 
@@ -487,8 +551,19 @@ def convert_multidigraph_to_digraph(multidigraph: nx.MultiDiGraph, weight: str =
             digraph.add_edge(u, v, **data)
     return digraph
 
-
+# TODO Можно использовать, не убирать.
 def subgraph_by_path(path: list, path_matrix: pd.DataFrame, graph: nx.Graph) -> nx.Graph:
+    """
+    Generate a subgraph by constructing a path from a list of nodes.
+
+    Args:
+        path (list): The list of nodes representing the path.
+        path_matrix (pd.DataFrame): The DataFrame containing the path information.
+        graph (nx.Graph): The original graph.
+
+    Returns:
+        nx.Graph: The subgraph constructed based on the path.
+    """
     graph_by_path = nx.DiGraph()
 
     def round_coordinates(

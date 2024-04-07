@@ -1,6 +1,5 @@
 __version__ = "0.3.1"
 
-from .dongraphio import DonGraphio
 from .enums import GraphType
 from .utils import (
     add_projected_points_as_nodes,

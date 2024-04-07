@@ -9,7 +9,7 @@ import requests
 
 DEFAULT_OVERPASS_URL = os.environ.get("OVERPASS_URL", "http://lz4.overpass-api.de/api/interpreter")
 
-
+#TODO Тут вроде всё рабочее, можно использовать
 def get_boundary(osm_id: int, overpass_url: str = DEFAULT_OVERPASS_URL, timeout: int = 300):
 
     overpass_query = f"""
