@@ -65,16 +65,19 @@ class DonGraphio:
         return self._intermodal_graph
 
     def get_adjacency_matrix(
-            self, buildings_from: gpd.GeoDataFrame, services_to: gpd.GeoDataFrame, weight: str,
-            graph_type: list[GraphType] | None = None,
+        self,
+        gdf_from: gpd.GeoDataFrame,
+        gdf_to: gpd.GeoDataFrame,
+        weight: str,
+        graph_type: list[GraphType] | None = None,
     ) -> Optional[pd.DataFrame]:
         """
         Calculate the adjacency matrix between the given GeoDataFrames based on
         the specified weight and intermodal graph.
 
         Args:
-            buildings_from (gpd.GeoDataFrame): The GeoDataFrame containing the buildings.
-            services_to (gpd.GeoDataFrame): The GeoDataFrame containing the services.
+            gdf_from (gpd.GeoDataFrame): The GeoDataFrame containing the buildings.
+            gdf_to (gpd.GeoDataFrame): The GeoDataFrame containing the services.
             weight (str): The weight attribute, could be only "time_min" or"length_meter".
             graph_type (list[GraphType]): The List of Enum types of the graph to search shortest way.
         Returns:
@@ -86,12 +89,12 @@ class DonGraphio:
             raise RuntimeError("No graph has set, call get_intermodal_graph_from_osm() or set it by set_graph()")
         logger.info("Creating adjacency matrix based on provided graph...")
         to_return = BuildsMatrixer(
-            buildings_from=buildings_from,
-            services_to=services_to,
+            gdf_from=gdf_from,
+            gdf_to=gdf_to,
             weight=weight,
             city_crs=self.city_crs,
             nx_intermodal_graph=self._intermodal_graph,
-            graph_type=graph_type
+            graph_type=graph_type,
         ).get_adjacency_matrix()
         logger.info("Adjacency matrix done!")
         return to_return
