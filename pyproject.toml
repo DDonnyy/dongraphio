@@ -20,14 +20,14 @@ numpy = "^1.23.5"
 pandas = "^2.2.0"
 networkx = "^3.2.1"
 loguru = "^0.7.2"
-ortools = "^9.9.3963"
-jupyter = "^1.0.0"
+
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.2.0"
 pylint = "^3.0.3"
 isort = "^5.13.2"
 jupyter = "^1.0.0"
+ortools = "^9.9.3963"
 
 [build-system]
 requires = ["poetry-core"]
