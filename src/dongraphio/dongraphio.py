@@ -10,11 +10,11 @@ from .enums import GraphType
 
 
 class DonGraphio:
-    def __init__(self, city_crs: int):
+    def __init__(self, city_crs: int, intermodal_graph: nx.MultiDiGraph | None = None):
         self.city_crs = city_crs
         # self.graphs: dict[GraphType, nx.Graph] = {} # TODO: add graphs to Invoker
 
-        self._intermodal_graph: nx.MultiDiGraph = None
+        self._intermodal_graph = intermodal_graph
 
     # TODO: replace non-alternative OSM integration with optional graphs build from OSM
     # def try_build_graph_from_osm(self, graph_type: GraphType, osm_id: int) -> nx.Graph:
