@@ -13,4 +13,3 @@ from .graph_utils import (
 )
 from .matrix_utils import get_dist_matrix, get_dist_matrix_for_tsp, get_nx2nk_idmap, get_subgraph
 from .osm_worker import get_boundary, get_routes, overpass_request
-from .tsp_solver import resolve_tsp
