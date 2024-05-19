@@ -84,9 +84,11 @@ class BuildsAvailabilitier(BaseModel):
         )
 
         stops, routes = (None, None)
-
         if GraphType.PUBLIC_TRANSPORT in self.graph_type and self.weight_type == "time_min":
-            stops, routes = self._get_routes(graph_gdf, distances.index.values, mobility_graph)
+            if not (graph_gdf[graph_gdf["stop"] == "True"]).empty:
+                stops, routes = self._get_routes(graph_gdf, distances.index.values, mobility_graph)
+            else:
+                logger.info('No public transport node in graph')
         return isochrones, routes, stops
 
     def _get_routes(self, graph_gdf, selected_nodes, mobility_graph):
@@ -100,23 +102,10 @@ class BuildsAvailabilitier(BaseModel):
             .infer_objects(copy=False)
         )
         stops = stops.join(stop_types)
-        stops.reset_index(inplace=True)
-        stops.rename(columns={"index": "nodeID"}, inplace=True)
-        stops_result = [stops.loc[stops["nodeID"].isin(selected_nodes)]]
-        nodes = [x["nodeID"] for x in stops_result]
-        subgraph = [mobility_graph.subgraph(x) for x in nodes]
-        routes = [pd.DataFrame.from_records([e[-1] for e in x.edges(data=True, keys=True)]) for x in subgraph]
-
-        def routes_selection(routes):
-            if len(routes) > 0:
-                routes_select = routes[routes["type"].isin(self._edge_types)]
-                routes_select["geometry"] = routes_select["geometry"].apply(lambda x: shapely.wkt.loads(x))
-                routes_select = routes_select[["type", "time_min", "length_meter", "geometry"]]
-                routes_select = gpd.GeoDataFrame(routes_select, crs=self.city_crs)
-                return routes_select
-            return None
-
-        routes_result = list(map(routes_selection, routes))
-        routes_result = gpd.GeoDataFrame(data=routes_result[0], geometry="geometry")
-        stops_result = gpd.GeoDataFrame(data=stops_result[0], geometry="geometry")
+        selected_nodes = [node for node in selected_nodes if node in stops.index]
+        subgraph = mobility_graph.subgraph(selected_nodes)
+        routes = pd.DataFrame.from_records([e[-1] for e in subgraph.edges(data=True)])
+        routes['geometry'] = routes['geometry'].apply(shapely.from_wkt)
+        routes_result = gpd.GeoDataFrame(data=routes, geometry="geometry",crs=graph_gdf.crs)
+        stops_result = gpd.GeoDataFrame(data=stops.loc[selected_nodes], geometry="geometry",crs=graph_gdf.crs)
         return stops_result, routes_result

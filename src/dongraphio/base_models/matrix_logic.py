@@ -49,7 +49,7 @@ class BuildsMatrixer(BaseModel):
         distance_matrix = pd.DataFrame(float(0), index=from_index, columns=to_index)
         from_index = list(set(from_index))
         to_index = list(set(to_index))
-        logger.debug("Calculating distances from buildings to services ...")
+        logger.debug("Calculating distances ...")
 
         distance_matrix_result = get_dist_matrix(
             mobility_sub_graph,
