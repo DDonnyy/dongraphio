@@ -39,7 +39,7 @@ class BuildsMatrixer(BaseModel):
         graph_gdf = nx_to_gdf(nx.MultiDiGraph(mobility_sub_graph), nodes=True)
 
         from_ = gpd.sjoin_nearest(self.gdf_from, graph_gdf)
-        from_ = from_.reset_index().drop_duplicates(subset="index", keep="first").set_index('index')
+        from_ = from_.reset_index().drop_duplicates(subset="index", keep="first").set_index("index")
 
         to_ = gpd.sjoin_nearest(self.gdf_to, graph_gdf)
         to_ = to_.reset_index().drop_duplicates(subset="index", keep="first").set_index("index")
@@ -59,9 +59,13 @@ class BuildsMatrixer(BaseModel):
         )
 
         distance_matrix_result = distance_matrix_result.apply(pd.to_numeric, errors="coerce")
+
         def update_value(ind, col):
-            if ind in distance_matrix_result.index and col in distance_matrix_result.columns:
-                return distance_matrix_result.loc[ind, col]
+            return (
+                distance_matrix_result.loc[ind, col]
+                if ind in distance_matrix_result.index and col in distance_matrix_result.columns
+                else None
+            )
 
         distance_matrix = distance_matrix.apply(lambda x: x.index.map(lambda ind: update_value(ind, x.name)))
         distance_matrix.index = self.gdf_from.index

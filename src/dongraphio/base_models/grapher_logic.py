@@ -221,13 +221,13 @@ class BuildsGrapher(BaseModel):
         graph = nx.MultiDiGraph()
         edegs_different_types = []
         if not self.public_transport_speeds:
-            self.public_transport_speeds = {  # TODO add enum in future version
+            self.public_transport_speeds = {
                 "subway": 12 * 1000 / 60,
                 "tram": 15 * 1000 / 60,
                 "trolleybus": 12 * 1000 / 60,
                 "bus": 17 * 1000 / 60,
             }
-        from_file = False  # TODO REMAKE FILE MANAGEMENT SYSTEM
+        from_file = False
 
         # for transport in gdf_files.values():
         #     if transport.get("stops") or transport.get("routes"):

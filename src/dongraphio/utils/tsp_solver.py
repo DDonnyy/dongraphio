@@ -27,8 +27,13 @@ def resolve_tsp(distance_matrix: pd.DataFrame, time_limit: int):
     routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
 
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
-    search_parameters.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
-    search_parameters.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
+
+    search_parameters.first_solution_strategy = (
+        routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC  # pylint: disable=no-member
+    )
+    search_parameters.local_search_metaheuristic = (
+        routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH  # pylint: disable=no-member
+    )
 
     search_parameters.time_limit.seconds = time_limit
 

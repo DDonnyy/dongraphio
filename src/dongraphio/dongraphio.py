@@ -3,6 +3,7 @@ from typing import Optional, Tuple
 import geopandas as gpd
 import networkx as nx
 import pandas as pd
+import shapely
 from loguru import logger
 
 from .base_models import BuildsAvailabilitier, BuildsGrapher, BuildsMatrixer
@@ -12,14 +13,9 @@ from .enums import GraphType
 class DonGraphio:
     def __init__(self, city_crs: int, intermodal_graph: nx.MultiDiGraph | None = None):
         self.city_crs = city_crs
-        # self.graphs: dict[GraphType, nx.Graph] = {} # TODO: add graphs to Invoker
+        # self.graphs: dict[GraphType, nx.Graph] = {}
 
         self._intermodal_graph = intermodal_graph
-
-    # TODO: replace non-alternative OSM integration with optional graphs build from OSM
-    # def try_build_graph_from_osm(self, graph_type: GraphType, osm_id: int) -> nx.Graph:
-    #     """Build a graph from OSM data and save it as the given graph type"""
-    #     raise NotImplementedError()
 
     def get_graph(self) -> Optional[nx.DiGraph]:
         """
@@ -44,8 +40,6 @@ class DonGraphio:
             None
         """
         self._intermodal_graph = graph
-
-    # TODO: update BuildsGrapher logic to construct from the graphs, fail if not all graphs are available
 
     def get_intermodal_graph_from_osm(self, city_osm_id: int, keep_city_boundary: bool = True) -> nx.MultiDiGraph:
         """
@@ -100,7 +94,7 @@ class DonGraphio:
         return to_return
 
     def get_accessibility_isochrones(
-        self, graph_type: list[GraphType], x_from: float, y_from: float, weight_value: int, weight_type: str
+        self, graph_type: list[GraphType], points: gpd.GeoSeries | shapely.Point, weight_value: int, weight_type: str
     ) -> Tuple[gpd.GeoDataFrame, Optional[gpd.GeoDataFrame], Optional[gpd.GeoDataFrame]]:
         """
         Get accessibility isochrones and return three GeoDataFrame objects with isochrones, and
@@ -108,8 +102,7 @@ class DonGraphio:
 
         Args:
             graph_type (list[GraphType]): The List of Enum types of the graph to build isochrones.
-            x_from (float): The x-coordinate of the starting point in the corresponding coordinate system.
-            y_from (float): The y-coordinate of the starting point in the corresponding coordinate system.
+            points (gpd.GeoSeries | shapely.Point): The GeoSeries containing points.
             weight_value (int): The value of the weight.
             weight_type (str): The type of the weight, could be only "time_min" or "length_meter" .
 
@@ -126,8 +119,7 @@ class DonGraphio:
         to_return = BuildsAvailabilitier(
             graph_type=graph_type,
             city_crs=self.city_crs,
-            x_from=x_from,
-            y_from=y_from,
+            points=points,
             weight_value=weight_value,
             weight_type=weight_type,
             nx_intermodal_graph=self._intermodal_graph,
