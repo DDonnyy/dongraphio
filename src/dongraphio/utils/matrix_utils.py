@@ -59,5 +59,5 @@ def get_dist_matrix_for_tsp(graph: nx.DiGraph, route_nodes: list[tuple]) -> (pd.
         for j in route_nodes:
             node_2, n1_2, n2_2 = j
             if (n1_1, n2_1) == (n2_2, n1_2):
-                distance_matrix.loc[node_1, node_2] = (mean_value+distance_matrix.loc[node_1, node_2])/3
+                distance_matrix.loc[node_1, node_2] = (mean_value + distance_matrix.loc[node_1, node_2]) / 3
     return distance_matrix, route_matrix
