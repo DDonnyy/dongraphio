@@ -1,6 +1,7 @@
 [tool.poetry]
 name = "dongraphio"
-version = "0.3.5"
+version = "0.3.6"
+license = "BSD-3-Clause"
 description = "Small utility library containing graph algorighms used in other projects"
 authors = ["Danila <63115678+DDonnyy@users.noreply.github.com>"]
 readme = "README.md"
@@ -20,7 +21,6 @@ numpy = "^1.23.5"
 pandas = "^2.2.0"
 networkx = "^3.2.1"
 loguru = "^0.7.2"
-
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.2.0"

@@ -50,7 +50,7 @@ class BuildsAvailabilitier(BaseModel):
         mobility_graph.graph["crs"] = self.city_crs
         graph_gdf = nx_to_gdf(nx.MultiDiGraph(mobility_graph), nodes=True)
 
-        from_sources = graph_gdf["geometry"].sindex.nearest(self.points, return_distance=True, return_all=False)[0][1]
+        from_sources = graph_gdf["geometry"].sindex.nearest(self.points, return_distance=True, return_all=False)
         source_index = from_sources[0][1]
         distances = pd.DataFrame(float(0), index=source_index, columns=list(mobility_graph.nodes()))
 
