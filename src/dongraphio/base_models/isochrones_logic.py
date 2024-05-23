@@ -69,7 +69,7 @@ class BuildsAvailabilitier(BaseModel):
         dist_nearest = dist_nearest / walk_speed if self.weight_type == "time_min" else dist_nearest
         distances = distances.add(dist_nearest.dist, axis=0).transpose()
 
-        distances = distances[distances[source_index[0]] <= self.weight_value]
+        distances = distances[distances[source_index] <= self.weight_value]
         results = []
         point_num = 0
         logger.debug("Building isochrones geometry...")
@@ -77,11 +77,12 @@ class BuildsAvailabilitier(BaseModel):
             geometry = []
             for ind in distances.index:
                 value = distances.loc[ind, column_name]
-                geometry.append(
-                    graph_gdf.loc[ind].geometry.buffer(round(self.weight_value - value, 2) * walk_speed * 0.8)
-                    if self.weight_type == "time_min"
-                    else graph_gdf.loc[ind].geometry.buffer(round(self.weight_value - value, 2) * 0.8)
-                )
+                if not pd.isna(value):
+                    geometry.append(
+                        graph_gdf.loc[ind].geometry.buffer(round(self.weight_value - value, 2) * walk_speed * 0.8)
+                        if self.weight_type == "time_min"
+                        else graph_gdf.loc[ind].geometry.buffer(round(self.weight_value - value, 2) * 0.8)
+                    )
             geometry = unary_union(geometry)
             results.append({"geometry": geometry, "point": str(self.points.iloc[point_num])})
             point_num += 1
