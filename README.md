@@ -9,6 +9,7 @@ import geopandas as gpd
 from dongraphio import DonGraphio
 from dongraphio import GraphType
 import networkx as nx
+from shapely import Point
 
 dongrph = DonGraphio(city_crs=32638)
     
@@ -17,13 +18,12 @@ nx.write_graphml(intermodal_graph,"city_intermodal.graphml")
 
 builds_from = gpd.read_file("test_data/buildings.geojson")
 services_to = gpd.read_file("test_data/services.geojson")
-adjacency_matrix = dongrph.get_adjacency_matrix(gdf_from=builds_from, gdf_to=services_to, weight="time_min")
+adjacency_matrix = dongrph.get_adjacency_matrix(gdf_from=builds_from, gdf_to=services_to, weight="time_min",graph_type=[GraphType.PUBLIC_TRANSPORT, GraphType.WALK])
 adjacency_matrix.to_csv("city_adjacency_matrix.csv")
 
 accessibility_isochrones, public_transport_routes, public_transport_stops = dongrph.get_accessibility_isochrones(
     graph_type=[GraphType.PUBLIC_TRANSPORT, GraphType.WALK],
-    x_from=571747,
-    y_from=5709639,
+    points=Point(571747,5709639),
     weight_value=15,
     weight_type="time_min",
 )

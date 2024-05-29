@@ -74,6 +74,7 @@ class BuildsAvailabilitier(BaseModel):
 
         distances = distances[distances[source_index] <= self.weight_value]
         distances.dropna(how="all", inplace=True)
+
         results = []
         point_num = 0
         logger.debug("Building isochrones geometry...")

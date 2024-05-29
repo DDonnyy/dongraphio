@@ -30,7 +30,6 @@ tqdm.pandas()
 class BuildsGrapher(BaseModel):
     city_osm_id: int
     city_crs: int
-    keep_city_boundary: bool = True
     public_transport_speeds: Optional[dict] = None
     walk_speed: Optional[dict] = None
     drive_speed: Optional[dict] = None

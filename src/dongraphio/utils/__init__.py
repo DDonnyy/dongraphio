@@ -1,4 +1,3 @@
-from .geometry_utils import clusterize_kmeans_geo_points
 from .graph_utils import (
     add_projected_points_as_nodes,
     convert_multidigraph_to_digraph,

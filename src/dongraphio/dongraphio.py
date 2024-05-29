@@ -54,7 +54,7 @@ class DonGraphio:
         #     raise ValueError("Some graph types are missing")
         logger.info("Creating intermodal graph from OSM...")
         self._intermodal_graph = BuildsGrapher(
-            city_osm_id=city_osm_id, city_crs=self.city_crs, keep_city_boundary=keep_city_boundary
+            city_osm_id=city_osm_id, city_crs=self.city_crs, truncate_by_edge=keep_city_boundary
         ).get_intermodal_graph()
         return self._intermodal_graph
 

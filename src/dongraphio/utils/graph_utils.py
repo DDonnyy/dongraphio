@@ -16,7 +16,7 @@ def parse_overpass_route_response(loc: dict, city_crs: int, boundary: gpd.GeoDat
         ways = ways.apply(pd.DataFrame)
         ways = ways.apply(lambda x: LineString(list(zip(x["lon"], x["lat"]))))
         ways = gpd.GeoDataFrame(ways.rename("geometry")).set_crs(4326)
-        if ways.within(boundary).all() or not use_boundary:
+        if ways.within(boundary).all() or use_boundary:
             # fix topological errors and then make LineString from MultiLineString
             ways = _get_linestring(ways.to_crs(city_crs))
         else:
