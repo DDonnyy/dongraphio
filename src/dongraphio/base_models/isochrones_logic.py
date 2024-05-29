@@ -1,7 +1,6 @@
 from typing import Literal, Optional, Tuple
 
 import geopandas as gpd
-import networkit as nk
 import networkx as nx
 import pandas as pd
 from loguru import logger
@@ -9,9 +8,10 @@ from pydantic import BaseModel, InstanceOf, field_validator
 from shapely import Point, from_wkt
 from shapely.ops import unary_union
 from tqdm.auto import tqdm
-from ..utils.matrix_utils import get_dist_matrix
+
 from ..enums import GraphType
-from ..utils import convert_multidigraph_to_digraph, get_nx2nk_idmap, matrix_utils, nx_to_gdf
+from ..utils import convert_multidigraph_to_digraph, matrix_utils, nx_to_gdf
+from ..utils.matrix_utils import get_dist_matrix
 
 tqdm.pandas()
 
@@ -37,7 +37,7 @@ class BuildsAvailabilitier(BaseModel):
         return points
 
     def get_accessibility_isochrone(
-            self,
+        self,
     ) -> Tuple[gpd.GeoDataFrame, Optional[gpd.GeoDataFrame], Optional[gpd.GeoDataFrame]]:
 
         self._edge_types = [d.value for d in sum([t.edges for t in self.graph_type], [])]
@@ -56,16 +56,19 @@ class BuildsAvailabilitier(BaseModel):
         dist_nearest = dist_nearest / walk_speed if self.weight_type == "time_min" else dist_nearest
 
         if (dist_nearest > self.weight_value).all().all():
-            raise RuntimeError('The point(s) lie further from the graph than weight_value, it\'s impossible to '
-                               'construct isochrones. Check the coordinates of the point(s)/their projection')
+            raise RuntimeError(
+                "The point(s) lie further from the graph than weight_value, it's impossible to "
+                "construct isochrones. Check the coordinates of the point(s)/their projection"
+            )
 
         source_index = from_sources[0][1]
         distances = pd.DataFrame(float(0), index=source_index, columns=list(mobility_graph.nodes()))
 
         logger.debug("Calculating distances from the specified point...")
 
-        distances = get_dist_matrix(mobility_graph, source_index, distances.columns.values, path_matrix=False,
-                                    weight=self.weight_type)
+        distances = get_dist_matrix(
+            mobility_graph, source_index, distances.columns.values, path_matrix=False, weight=self.weight_type
+        )
 
         distances = distances.add(dist_nearest.dist, axis=0).transpose()
 
@@ -85,7 +88,7 @@ class BuildsAvailabilitier(BaseModel):
                         else graph_gdf.loc[ind].geometry.buffer(round(self.weight_value - value, 2) * 0.8)
                     )
             geometry = unary_union(geometry)
-            results.append({"geometry": geometry, "point": str(self.points.iloc[point_num]), 'point_number': point_num})
+            results.append({"geometry": geometry, "point": str(self.points.iloc[point_num]), "point_number": point_num})
             point_num += 1
 
         isochrones = gpd.GeoDataFrame(data=results, geometry="geometry", crs=self.city_crs)
