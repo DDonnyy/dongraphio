@@ -19,8 +19,8 @@ momepy = "^0.6.0"
 networkit = "^11.0"
 numpy = "^1.23.5"
 pandas = "^2.2.0"
-networkx = "^3.2.1"
 loguru = "^0.7.2"
+networkx = "3.1"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.2.0"
