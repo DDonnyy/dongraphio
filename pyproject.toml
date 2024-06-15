@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dongraphio"
-version = "0.3.9"
+version = "0.3.10"
 license = "BSD-3-Clause"
 description = "Small utility library containing graph algorighms used in other projects"
 authors = ["Danila <63115678+DDonnyy@users.noreply.github.com>"]
@@ -9,18 +9,18 @@ readme = "README.md"
 packages = [{ include = "dongraphio", from = "src" }]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.10"
 geopandas = "^0.14.3"
 osmnx = "^1.9.1"
 tqdm = "^4.66.2"
 osm2geojson = "^0.2.4"
 pydantic = "^2.6.1"
-momepy = "^0.6.0"
 networkit = "^11.0"
 numpy = "^1.23.5"
 pandas = "^2.2.0"
-networkx = "^3.2.1"
+networkx = "^3.3"
 loguru = "^0.7.2"
+scipy = "^1.13.1"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.2.0"

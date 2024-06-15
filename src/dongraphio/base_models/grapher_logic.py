@@ -1,7 +1,6 @@
 from typing import Optional
 
 import geopandas as gpd
-import momepy
 import networkx as nx
 import numpy as np
 import osm2geojson
@@ -21,6 +20,7 @@ from ..utils import (
     project_platforms,
     project_point_on_edge,
     update_edges,
+    nx_to_gdf
 )
 
 pd.options.mode.chained_assignment = None
@@ -99,7 +99,7 @@ class BuildsGrapher(BaseModel):
 
         nodes: gpd.GeoDataFrame
         edges: gpd.GeoDataFrame
-        nodes, edges = momepy.nx_to_gdf(G_ox, points=True, lines=True, spatial_weights=False)
+        nodes, edges = nx_to_gdf(G_ox, nodes=True, edges=True)
         nodes = nodes.to_crs(self.city_crs).set_index("nodeID")
         nodes_coord = nodes.geometry.apply(
             lambda p: {"x": round(p.coords[0][0], 2), "y": round(p.coords[0][1], 2)}

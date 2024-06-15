@@ -31,4 +31,4 @@ update:
 	poetry update
 
 install-from-build:
-	python -m wheel install dist/graph_lib-*.whl
+	python -m wheel unpack dist/dongraphio-0.3.10-py3-none-any.whl
