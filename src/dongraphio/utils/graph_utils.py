@@ -377,21 +377,21 @@ def _add_connecting_edges(G: nx.Graph, split_nodes: gpd.GeoDataFrame) -> tuple[n
 
 
 def nx_to_gdf(
-    graph: nx.MultiDiGraph, nodes: bool = False, edges: bool = False
-) -> gpd.GeoDataFrame | tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+    graph: nx.MultiDiGraph, nodes: bool = False, edges: bool = False,node_geometry=False,fill_edge_geometry=False) -> gpd.GeoDataFrame | tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     for _, _, data in graph.edges(data=True):
-        data["geometry"] = from_wkt(str(data["geometry"]))
+        if 'geometry' in data:
+            data["geometry"] = from_wkt(str(data["geometry"]))
 
     if edges and nodes:
-        gdf_graph_nodes, gdf_graph_edges = ox.graph_to_gdfs(graph, nodes=True, edges=True)
+        gdf_graph_nodes, gdf_graph_edges = ox.graph_to_gdfs(graph, nodes=True, edges=True,node_geometry=node_geometry,fill_edge_geometry=fill_edge_geometry)
         gdf_graph_edges = gdf_graph_edges.reset_index()
         return gdf_graph_nodes, gdf_graph_edges
     elif edges:
-        gdf_graph_edges = ox.graph_to_gdfs(graph, nodes=False, edges=True)
+        gdf_graph_edges = ox.graph_to_gdfs(graph, nodes=False, edges=True,fill_edge_geometry=fill_edge_geometry)
         gdf_graph_edges = gdf_graph_edges.reset_index()
         return gdf_graph_edges
     elif nodes:
-        gdf_graph_nodes = ox.graph_to_gdfs(graph, nodes=True, edges=False)
+        gdf_graph_nodes = ox.graph_to_gdfs(graph, nodes=True, edges=False,node_geometry=node_geometry)
         return gdf_graph_nodes
     raise ValueError("You must specify either nodes or edges as True.")
 

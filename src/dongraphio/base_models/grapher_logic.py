@@ -99,13 +99,13 @@ class BuildsGrapher(BaseModel):
 
         nodes: gpd.GeoDataFrame
         edges: gpd.GeoDataFrame
-        nodes, edges = nx_to_gdf(G_ox, nodes=True, edges=True)
-        nodes = nodes.to_crs(self.city_crs).set_index("nodeID")
+        nodes, edges = nx_to_gdf(G_ox, nodes=True, edges=True,node_geometry=True,fill_edge_geometry=True)
+        nodes = nodes.to_crs(self.city_crs)
         nodes_coord = nodes.geometry.apply(
             lambda p: {"x": round(p.coords[0][0], 2), "y": round(p.coords[0][1], 2)}
         ).to_dict()
 
-        edges = edges[["length", "node_start", "node_end", "geometry"]].to_crs(self.city_crs)
+        edges = edges[["length", "u", "v", "geometry"]].to_crs(self.city_crs)
         edges["type"] = graph_type
         edges["geometry"] = edges["geometry"].apply(
             lambda x: LineString([tuple(round(c, 2) for c in n) for n in x.coords] if x else None)
@@ -116,8 +116,8 @@ class BuildsGrapher(BaseModel):
             speed = 4 * 1000 / 60 if graph_type == "walk" else 17 * 1000 / 60
         G = nx.MultiDiGraph()
         for _, edge in tqdm(edges.iterrows(), total=len(edges), desc=f"Collecting {graph_type} graph", leave=False):
-            p1 = int(edge.node_start)
-            p2 = int(edge.node_end)
+            p1 = int(edge.u)
+            p2 = int(edge.v)
             geom = (
                 LineString(
                     (
