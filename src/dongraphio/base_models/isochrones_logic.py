@@ -50,13 +50,10 @@ class BuildsAvailabilitier(BaseModel):
         tree = KDTree(coordinates)
         target_coord = [(p.x, p.y) for p in self.points]
         distance, indices = tree.query(target_coord)
-        nearest_nodes = [nodes_with_data[index][0] for index in indices]
 
-        # TODO do not raise if duplicates
-        if len(set(nearest_nodes)) != len(nearest_nodes):
-            raise RuntimeError("Some points are too close to each other,check projection/geometry")
+        nearest_nodes = [(index, nodes_with_data[idx][0]) for index, idx in enumerate(indices)]
 
-        dist_nearest = pd.DataFrame(data=distance, index=nearest_nodes, columns=["dist"])
+        dist_nearest = pd.DataFrame(data=distance, index=pd.MultiIndex.from_tuples(nearest_nodes), columns=["dist"])
         walk_speed = 4 * 1000 / 60
         dist_nearest = dist_nearest / walk_speed if self.weight_type == "time_min" else dist_nearest
 
@@ -67,18 +64,18 @@ class BuildsAvailabilitier(BaseModel):
             )
 
         data = []
-        for source in nearest_nodes:
+        for point_index, source in nearest_nodes:
             dist, path = nx.single_source_dijkstra(
                 mobility_graph, source, weight=self.weight_type, cutoff=self.weight_value
             )
-            for node_from, way in path.items():
+            for target_node, way in path.items():
                 source = way[0]
-                destination = node_from
-                distance = dist.get(node_from, np.nan)
-                data.append((source, destination, distance))
+                distance = dist.get(target_node, np.nan)
+                data.append((point_index, source, target_node, distance))
 
-        dist_matrix = pd.DataFrame(data, columns=["source", "destination", "distance"])
-        dist_matrix = dist_matrix.pivot(index="source", columns="destination", values="distance")
+        dist_matrix = pd.DataFrame(data, columns=["point_index", "source", "destination", "distance"])
+        dist_matrix = dist_matrix.pivot_table(index=["point_index", "source"], columns="destination", values="distance")
+
         dist_matrix = dist_matrix.add(dist_nearest.dist, axis=0).transpose()
         dist_matrix = dist_matrix.mask(dist_matrix >= self.weight_value, np.nan)
         dist_matrix.dropna(how="all", inplace=True)
@@ -87,10 +84,10 @@ class BuildsAvailabilitier(BaseModel):
         point_num = 0
         logger.info("Building isochrones geometry...")
 
-        for column_name in dist_matrix.columns:
+        for unique_ind, node_ind in dist_matrix.columns:
             geometry = []
             for ind in dist_matrix.index:
-                value = dist_matrix.loc[ind, column_name]
+                value = dist_matrix.loc[ind, (unique_ind, node_ind)]
                 if not pd.isna(value):
                     node = mobility_graph.nodes[ind]
                     point = Point(node["x"], node["y"])
@@ -118,7 +115,7 @@ class BuildsAvailabilitier(BaseModel):
                 logger.info("Building public transport geometry...")
                 stops, routes = self._get_routes(node_data, mobility_graph)
             else:
-                logger.info("No public transport node in graph")
+                logger.info("No public transport nodes in accessibility")
         return isochrones, routes, stops
 
     def _get_routes(self, stops, mobility_graph):

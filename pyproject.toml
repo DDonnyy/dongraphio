@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dongraphio"
-version = "0.3.11"
+version = "0.3.12"
 license = "BSD-3-Clause"
 description = "Small utility library containing graph algorighms used in other projects"
 authors = ["Danila <63115678+DDonnyy@users.noreply.github.com>"]

@@ -15,12 +15,12 @@ from ..utils import (
     get_boundary,
     get_nearest_edge_geometry,
     get_routes,
+    nx_to_gdf,
     overpass_request,
     parse_overpass_route_response,
     project_platforms,
     project_point_on_edge,
     update_edges,
-    nx_to_gdf
 )
 
 pd.options.mode.chained_assignment = None
@@ -99,7 +99,7 @@ class BuildsGrapher(BaseModel):
 
         nodes: gpd.GeoDataFrame
         edges: gpd.GeoDataFrame
-        nodes, edges = nx_to_gdf(G_ox, nodes=True, edges=True,node_geometry=True,fill_edge_geometry=True)
+        nodes, edges = nx_to_gdf(G_ox, nodes=True, edges=True, node_geometry=True, fill_edge_geometry=True)
         nodes = nodes.to_crs(self.city_crs)
         nodes_coord = nodes.geometry.apply(
             lambda p: {"x": round(p.coords[0][0], 2), "y": round(p.coords[0][1], 2)}
