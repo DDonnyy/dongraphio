@@ -36,7 +36,7 @@ class BuildsMatrixer(BaseModel):
 
         mobility_sub_graph.graph["crs"] = self.city_crs
 
-        graph_gdf = nx_to_gdf(nx.MultiDiGraph(mobility_sub_graph), nodes=True)
+        graph_gdf = nx_to_gdf(nx.MultiDiGraph(mobility_sub_graph), nodes=True,node_geometry=True)
 
         from_ = gpd.sjoin_nearest(self.gdf_from, graph_gdf)
         from_ = from_.reset_index().drop_duplicates(subset="index", keep="first").set_index("index")
