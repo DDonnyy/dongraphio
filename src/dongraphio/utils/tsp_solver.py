@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
 
@@ -11,7 +12,14 @@ def resolve_tsp(distance_matrix: pd.DataFrame, time_limit: int):
             index = solution.Value(routing.NextVar(index))
         return result
 
-    dm = distance_matrix.values.tolist()
+
+    inf_value = 1e6
+    distance_matrix_ = distance_matrix.copy(deep=True)
+    distance_matrix_ = distance_matrix_.replace([np.inf, -np.inf], inf_value)
+    max_value = 2**31 - 1  
+    distance_matrix_ = distance_matrix_.clip(upper=max_value)
+
+    dm = distance_matrix_.values.tolist()
     dm = [[round(num) for num in sublist] for sublist in dm]
     manager = pywrapcp.RoutingIndexManager(len(dm), 1, 0)
 
@@ -40,6 +48,6 @@ def resolve_tsp(distance_matrix: pd.DataFrame, time_limit: int):
     solution = routing.SolveWithParameters(search_parameters)
 
     result = get_solution(manager, routing, solution)
-    mapping = dict(zip(range(distance_matrix.shape[0]), distance_matrix.index))
+    mapping = dict(zip(range(distance_matrix_.shape[0]), distance_matrix_.index))
     path = [mapping.get(i) for i in result]
     return path

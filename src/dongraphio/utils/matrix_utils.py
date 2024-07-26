@@ -1,6 +1,7 @@
 import networkit as nk
 import networkx as nx
 import pandas as pd
+from tqdm import tqdm
 
 
 def get_subgraph(G_nx: nx.MultiDiGraph, attr, value):
@@ -42,7 +43,7 @@ def get_dist_matrix(
     spsp = nk.distance.SPSP(nk_graph, sources=[mapping.get(x) for x in nodes_from])
     spsp.setTargets(targets=[mapping.get(x) for x in nodes_to])
     spsp.run()
-    for source in nodes_from:
+    for source in tqdm(nodes_from, desc="Processing matrix 2"):
         for dest in nodes_to:
             total_distance = spsp.getDistance(mapping.get(source), mapping.get(dest))
             distance_matrix.loc[source, dest] = total_distance
@@ -61,3 +62,17 @@ def get_dist_matrix_for_tsp(graph: nx.DiGraph, route_nodes: list[tuple]) -> (pd.
             if (n1_1, n2_1) == (n2_2, n1_2):
                 distance_matrix.loc[node_1, node_2] = (mean_value + distance_matrix.loc[node_1, node_2]) / 3
     return distance_matrix, route_matrix
+
+def get_dist_matrix_for_tsp_single(graph: nx.DiGraph, route_nodes: list[tuple]) -> (pd.DataFrame, pd.DataFrame):
+    route_nodes_ind = [x[0] for x in route_nodes]
+    distance_matrix = get_dist_matrix(graph, route_nodes_ind, route_nodes_ind, False)
+    print(type(distance_matrix.values))
+    mean_value = distance_matrix.values.mean()
+    
+    for i in tqdm(route_nodes, desc="Processing route nodes"):
+        node_1, n1_1, n2_1 = i
+        for j in route_nodes:
+            node_2, n1_2, n2_2 = j
+            if (n1_1, n2_1) == (n2_2, n1_2):
+                distance_matrix.loc[node_1, node_2] = (mean_value + distance_matrix.loc[node_1, node_2]) / 3
+    return distance_matrix
