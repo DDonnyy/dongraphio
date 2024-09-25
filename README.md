@@ -1,3 +1,6 @@
+# Outdated. 
+## It will no longer be supported. The latest version of the method has been migrated to [IduEdu](https://github.com/DDonnyy/IduEdu) . 
+
 # DonGraphio
 
 Small utility library containing graph algorighms used in other projects.
